@@ -6,15 +6,24 @@ import { Footer } from "@/components/shell/Footer";
 import { Dock } from "@/components/shell/Dock";
 import { PreviewBar } from "@/components/shell/PreviewBar";
 import { WalletProviders } from "@/components/wallet/WalletProviders";
+import { PREVIEW, SITE_URL } from "@/lib/config";
 import "./globals.css";
 
 const archivo = Archivo({ subsets: ["latin"], axes: ["wdth"], variable: "--font-archivo", display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono", display: "swap" });
 
+const DESCRIPTION =
+  "Launch Solana tokens backed by an on-chain SOL reserve. Anyone can redeem at the floor once redemption opens, and the floor only goes up.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: { default: "Strata: tokens with a floor", template: "%s · Strata" },
-  description:
-    "Launch Solana tokens backed by an on-chain SOL reserve. Anyone can redeem at the floor once redemption opens, and the floor only goes up.",
+  description: DESCRIPTION,
+  applicationName: "Strata",
+  openGraph: { type: "website", siteName: "Strata", title: "Strata: tokens with a floor", description: DESCRIPTION, locale: "en_US" },
+  twitter: { card: "summary_large_image", title: "Strata: tokens with a floor", description: DESCRIPTION },
+  // Keep the preview out of search results until it's live.
+  robots: PREVIEW ? { index: false, follow: false } : undefined,
 };
 
 export const viewport: Viewport = {

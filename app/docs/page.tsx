@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Plate } from "@/components/ui";
 import { shortAddress, solscanAccount } from "@/lib/format";
 import { bpsToPct, LIMITS } from "@/lib/limits";
+import { PROGRAMS_LIVE } from "@/lib/config";
 import { PROGRAM_LIST } from "@/lib/programs";
 
 const S = LIMITS.settings;
@@ -142,6 +143,12 @@ a buy that creates t tokens:
           <h2 id="programs" className="type-h2">
             Programs
           </h2>
+          {!PROGRAMS_LIVE ? (
+            <p>
+              The programs aren&rsquo;t deployed yet. Their addresses will be listed here, each linked to Solscan, so you can check
+              the code you&rsquo;re trusting.
+            </p>
+          ) : (
           <ul className="mt-4 grid">
             {PROGRAM_LIST.map((p) => (
               <li key={p.address} className="hairline-top flex items-baseline justify-between gap-4 py-2.5">
@@ -152,7 +159,7 @@ a buy that creates t tokens:
               </li>
             ))}
           </ul>
-          <p className="text-sm! text-muted">Placeholder addresses until the programs deploy.</p>
+          )}
         </article>
 
         <aside className="hidden xl:block" aria-label="On this page">

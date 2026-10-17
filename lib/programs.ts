@@ -16,7 +16,11 @@ export const PROGRAM_LIST: { name: string; address: string }[] = [
   { name: "Fee router", address: PROGRAMS.fees },
 ];
 
+/** PLACEHOLDER social links until the real accounts are set. */
 export const LINKS = {
   github: "https://github.com/",
   x: "https://x.com/",
 } as const;
+
+/** A bare github.com / x.com URL is still the placeholder, so the UI hides it. */
+export const isRealLink = (url: string) => !/^https:\/\/(github|x)\.com\/?$/.test(url);

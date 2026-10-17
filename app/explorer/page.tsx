@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { MintLookup } from "@/components/explorer/MintLookup";
 import { Panel, Plate } from "@/components/ui";
 import { shortAddress, solscanAccount } from "@/lib/format";
+import { PROGRAMS_LIVE } from "@/lib/config";
 import { PROGRAM_LIST } from "@/lib/programs";
 
 export const metadata: Metadata = { title: "Explorer" };
@@ -17,7 +18,10 @@ export default function ExplorerPage() {
         <Panel title="By mint address" titleId="lookup-title" note="Paste a token's mint to see its reserve, floor and settings.">
           <MintLookup />
         </Panel>
-        <Panel title="Programs" titleId="programs-title" note="Placeholder addresses until deploy.">
+        <Panel title="Programs" titleId="programs-title">
+          {!PROGRAMS_LIVE ? (
+            <p className="text-sm leading-[1.5] text-muted">Addresses will be listed here, linked to Solscan, once the programs are deployed.</p>
+          ) : (
           <dl className="quote">
             {PROGRAM_LIST.map((p) => (
               <div key={p.address}>
@@ -30,6 +34,7 @@ export default function ExplorerPage() {
               </div>
             ))}
           </dl>
+          )}
         </Panel>
       </div>
     </div>

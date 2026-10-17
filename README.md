@@ -58,6 +58,25 @@ These are encoded in `lib/floor.ts` and should match the programs:
 - **Fees to reserve** only add SOL, so the floor only rises.
 - Launch fee is shown as 0.02 SOL plus rent (placeholder).
 
+## Deploying a preview
+
+Vercel is the simplest host (any Node host that runs `next start` works). Set these environment variables:
+
+| Variable | Value | Effect |
+|---|---|---|
+| `PREVIEW_PASSWORD` | any string | Optional. Every page asks for it (any username). Icons, build assets and `robots.txt` stay public. Unset = no gate. |
+| `NEXT_PUBLIC_SITE_URL` | `https://your-domain` | Absolute URLs for share cards, the sitemap and robots.txt. Falls back to the Vercel production URL. |
+| `NEXT_PUBLIC_SOLANA_RPC` | RPC URL | Use a paid endpoint before real traffic; the public one rate-limits. |
+| `NEXT_PUBLIC_STRATA_DATA` | `mock` / `rpc` | Leave `mock` until `lib/data/rpc.ts` is implemented. |
+| `NEXT_PUBLIC_PROGRAMS_LIVE` | `false` / `true` | `true` only once the programs are deployed. |
+
+While the data is `mock` or the programs aren't live, the site is in **preview mode**:
+- A notice runs across the top of every page.
+- `robots.txt` disallows crawling and every page carries `noindex`.
+- The footer, docs and explorer hide the placeholder program addresses.
+
+GitHub and X links stay hidden until `LINKS` in `lib/programs.ts` points at real accounts.
+
 ## Wallets
 
 Phantom and Solflare use explicit adapters. Backpack's adapter package is deprecated, so it

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { IconGitHub, IconX, StrataMark } from "@/components/icons";
 import { shortAddress, solscanAccount } from "@/lib/format";
-import { LINKS, PROGRAM_LIST } from "@/lib/programs";
+import { PROGRAMS_LIVE } from "@/lib/config";
+import { isRealLink, LINKS, PROGRAM_LIST } from "@/lib/programs";
 import { PRIMARY_NAV, SECONDARY_NAV } from "./nav";
 
 export function Footer() {
@@ -38,7 +39,12 @@ export function Footer() {
         </nav>
 
         <div className="md:col-span-6 lg:col-span-3 lg:col-start-10">
-          <p className="mb-3 font-mono text-xs font-medium tracking-[0.02em] opacity-75">Programs on mainnet</p>
+          <p className="mb-3 font-mono text-xs font-medium tracking-[0.02em] opacity-75">{PROGRAMS_LIVE ? "Programs on mainnet" : "Programs"}</p>
+          {!PROGRAMS_LIVE ? (
+            <p className="max-w-[24rem] text-[15px] leading-normal opacity-85">
+              Program addresses will be listed here, each linked to Solscan, once the programs are deployed.
+            </p>
+          ) : (
           <ul className="grid">
             {PROGRAM_LIST.map((p) => (
               <li key={p.address}>
@@ -62,24 +68,28 @@ export function Footer() {
               </li>
             ))}
           </ul>
-          <p className="mt-2 font-mono text-[11px] leading-4 opacity-60">Placeholder addresses until the programs deploy.</p>
+          )}
         </div>
       </div>
       <div className="frame">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[color-mix(in_srgb,var(--on-deep)_22%,transparent)] pt-4 pb-6 text-sm">
-          <a href={LINKS.github} target="_blank" rel="noreferrer" className="mr-2 inline-flex items-center gap-1.5 font-semibold underline decoration-2 underline-offset-4">
-            <IconGitHub size={18} />
-            GitHub
-          </a>
-          <a
-            href={LINKS.x}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Strata on X"
-            className="inline-grid size-8 place-items-center rounded-[4px] hover:bg-[color-mix(in_srgb,currentColor_14%,transparent)]"
-          >
-            <IconX size={16} />
-          </a>
+          {isRealLink(LINKS.github) && (
+            <a href={LINKS.github} target="_blank" rel="noreferrer" className="mr-2 inline-flex items-center gap-1.5 font-semibold underline decoration-2 underline-offset-4">
+              <IconGitHub size={18} />
+              GitHub
+            </a>
+          )}
+          {isRealLink(LINKS.x) && (
+            <a
+              href={LINKS.x}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Strata on X"
+              className="inline-grid size-8 place-items-center rounded-[4px] hover:bg-[color-mix(in_srgb,currentColor_14%,transparent)]"
+            >
+              <IconX size={16} />
+            </a>
+          )}
           <p className="ml-auto font-mono text-xs opacity-60">© 2026 Strata. Not financial advice.</p>
         </div>
       </div>
