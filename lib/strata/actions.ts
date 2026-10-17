@@ -95,6 +95,8 @@ async function send(
   const signature = await signer.sendTransaction(tx, connection, { signers: opts.extra ?? [], skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 5 });
   const res = await connection.confirmTransaction({ signature, ...latest }, "confirmed");
   if (res.value.err) throw new Error(`Transaction failed: ${JSON.stringify(res.value.err)}`);
+  // Refresh the cached homepage and projects list; a failure only delays it by a minute.
+  await fetch("/api/revalidate", { method: "POST" }).catch(() => {});
   return signature;
 }
 
