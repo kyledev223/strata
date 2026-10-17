@@ -6,7 +6,7 @@ import { Footer } from "@/components/shell/Footer";
 import { Dock } from "@/components/shell/Dock";
 import { PreviewBar } from "@/components/shell/PreviewBar";
 import { WalletProviders } from "@/components/wallet/WalletProviders";
-import { PREVIEW, SITE_URL } from "@/lib/config";
+import { NOINDEX, SITE_URL } from "@/lib/config";
 import "./globals.css";
 
 const archivo = Archivo({ subsets: ["latin"], axes: ["wdth"], variable: "--font-archivo", display: "swap" });
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   openGraph: { type: "website", siteName: "Strata", title: "Strata: tokens with a floor", description: DESCRIPTION, locale: "en_US" },
   twitter: { card: "summary_large_image", title: "Strata: tokens with a floor", description: DESCRIPTION },
   // Keep the preview out of search results until it's live.
-  robots: PREVIEW ? { index: false, follow: false } : undefined,
+  robots: NOINDEX ? { index: false, follow: false } : undefined,
 };
 
 export const viewport: Viewport = {

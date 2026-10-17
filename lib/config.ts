@@ -31,3 +31,9 @@ export const SITE_URL = (
 
 /** Show the preview notice while either of the above is still pretend. */
 export const PREVIEW = SAMPLE_DATA || !PROGRAMS_LIVE;
+
+/** Running on a test cluster (devnet/localnet): real transactions, but test SOL with no value. */
+export const TESTNET = CLUSTER !== "mainnet-beta";
+
+/** Keep previews and test-money deployments out of search results. */
+export const NOINDEX = PREVIEW || TESTNET;
