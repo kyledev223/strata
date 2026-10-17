@@ -46,36 +46,40 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #141412;
-    --surface: #1e1d1a;
+    --bg: #000000;
+    --surface: #121211;
     --text: #ece7dd;
     --muted: #9c968a;
-    --rule: #33312c;
+    --rule: #2b2925;
     --accent: #5fa595;
     --accent-2: #d9774f;
-    --rule-strong: color-mix(in srgb, var(--text) 22%, var(--rule));
-    --well: color-mix(in srgb, var(--bg) 60%, var(--surface));
-    --on-accent: #141412;
-    --deep: #0d0d0c;
+    --rule-strong: color-mix(in srgb, var(--text) 24%, var(--rule));
+    --well: #080807;
+    --on-accent: #000000;
+    /* lifted, so slabs and the footer still read against black */
+    --deep: #1c1b18;
     --on-deep: #ece7dd;
-    --cast: #00000080;
+    /* hard 2px edge as dim stone; a black shadow vanishes on black */
+    --cast: #2e2c27;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #141412;
-  --surface: #1e1d1a;
+  --bg: #000000;
+  --surface: #121211;
   --text: #ece7dd;
   --muted: #9c968a;
-  --rule: #33312c;
+  --rule: #2b2925;
   --accent: #5fa595;
   --accent-2: #d9774f;
-  --rule-strong: color-mix(in srgb, var(--text) 22%, var(--rule));
-  --well: color-mix(in srgb, var(--bg) 60%, var(--surface));
-  --on-accent: #141412;
-  --deep: #0d0d0c;
+  --rule-strong: color-mix(in srgb, var(--text) 24%, var(--rule));
+  --well: #080807;
+  --on-accent: #000000;
+  /* lifted, so slabs and the footer still read against black */
+  --deep: #1c1b18;
   --on-deep: #ece7dd;
-  --cast: #00000080;
+  /* hard 2px edge as dim stone; a black shadow vanishes on black */
+  --cast: #2e2c27;
   color-scheme: dark;
 }
 

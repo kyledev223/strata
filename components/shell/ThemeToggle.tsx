@@ -1,14 +1,18 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { IconMoon, IconSun } from "@/components/icons";
 
 type Theme = "light" | "dark";
-const COLORS: Record<Theme, string> = { light: "#EDE9E1", dark: "#141412" };
+const COLORS: Record<Theme, string> = { light: "#EDE9E1", dark: "#000000" };
+
+function syncThemeColor(theme: Theme) {
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute("content", COLORS[theme]));
+}
 
 function apply(theme: Theme) {
   document.documentElement.dataset.theme = theme;
-  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute("content", COLORS[theme]));
+  syncThemeColor(theme);
 }
 
 // The init script resolves the theme before paint; this just observes <html data-theme>.
@@ -23,6 +27,11 @@ const getServerTheme = (): Theme | null => null;
 export function ThemeToggle() {
   const theme = useSyncExternalStore(subscribe, getTheme, getServerTheme);
   const next: Theme = theme === "dark" ? "light" : "dark";
+
+  // Metadata can stream in after the init script ran, so re-sync once hydrated.
+  useEffect(() => {
+    if (theme) syncThemeColor(theme);
+  }, [theme]);
 
   return (
     <button

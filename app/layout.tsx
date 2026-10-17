@@ -17,16 +17,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#EDE9E1" },
-    { media: "(prefers-color-scheme: dark)", color: "#141412" },
-  ],
+  // Black is the default theme; the toggle swaps this when someone picks light.
+  themeColor: "#000000",
   width: "device-width",
   initialScale: 1,
 };
 
-// Runs before paint: apply the saved theme so there is no flash, then sync theme-color.
-const themeInit = `(function(){try{var t=localStorage.getItem('strata-theme');if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var d=document.documentElement;d.dataset.theme=t;var c=t==='dark'?'#141412':'#EDE9E1';var s=function(){document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute('content',c)})};s();document.addEventListener('DOMContentLoaded',s)}catch(e){}})();`;
+// Runs before paint: apply the saved theme (black by default) so there is no flash, then sync theme-color.
+const themeInit = `(function(){try{var t=localStorage.getItem('strata-theme');if(t!=='light'&&t!=='dark'){t='dark'}var d=document.documentElement;d.dataset.theme=t;var c=t==='dark'?'#000000':'#EDE9E1';var s=function(){document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute('content',c)})};s();document.addEventListener('DOMContentLoaded',s)}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
