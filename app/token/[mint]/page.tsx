@@ -3,13 +3,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { IconArrowUpRight, IconBurn } from "@/components/icons";
 import { CopyButton } from "@/components/token/CopyButton";
+import { CreatorPanel } from "@/components/token/CreatorPanel";
 import { PriceChart } from "@/components/token/PriceChart";
 import { FloorGauge } from "@/components/token/Spark";
 import { TokenGlyph } from "@/components/token/TokenGlyph";
 import { TradePanel } from "@/components/token/TradePanel";
 import { cx, Panel, SolPrice, Stat } from "@/components/ui";
+import { explorerUrl } from "@/lib/config";
 import { getDataSource } from "@/lib/data";
-import { formatAge, formatBps, formatCompact, formatNumber, formatPct, formatSol, shortAddress, solscanAccount } from "@/lib/format";
+import { formatAge, formatBps, formatCompact, formatNumber, formatPct, formatSol, shortAddress } from "@/lib/format";
 
 type Props = { params: Promise<{ mint: string }>; searchParams: Promise<{ tab?: string }> };
 
@@ -50,9 +52,9 @@ export default async function TokenPage({ params, searchParams }: Props) {
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs font-medium">
               <span className="font-semibold">{token.ticker}</span>
               <span className="inline-flex items-center gap-0.5 text-muted">
-                <a href={solscanAccount(token.mint)} target="_blank" rel="noreferrer" className="underline decoration-transparent underline-offset-2 hover:decoration-current">
+                <a href={explorerUrl("account", token.mint)} target="_blank" rel="noreferrer" className="underline decoration-transparent underline-offset-2 hover:decoration-current">
                   {shortAddress(token.mint)}
-                  <span className="sr-only"> (mint address, opens Solscan)</span>
+                  <span className="sr-only"> (mint address, opens the explorer)</span>
                 </a>
                 <CopyButton value={token.mint} label="Copy mint address" />
               </span>
@@ -84,11 +86,12 @@ export default async function TokenPage({ params, searchParams }: Props) {
 
         <aside className="grid min-w-0 gap-4 lg:sticky lg:top-[calc(var(--header-h)+24px)] lg:col-start-2 lg:row-span-2 lg:row-start-1" aria-label="Trade">
           <TradePanel token={token} asOf={asOf} initialTab={initialTab} />
+          <CreatorPanel token={token} />
           <div className="well px-4 py-3 text-sm leading-[1.5]">
             <p className="mb-1 font-mono text-xs font-semibold">About</p>
-            <p className="text-pretty">{token.description}</p>
+            <p className="text-pretty">{token.description || "No description."}</p>
             <a
-              href={solscanAccount(token.creator)}
+              href={explorerUrl("account", token.creator)}
               target="_blank"
               rel="noreferrer"
               className="mt-2 inline-flex items-center gap-1 font-mono text-xs text-muted underline decoration-transparent underline-offset-2 hover:decoration-current"

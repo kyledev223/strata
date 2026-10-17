@@ -1,25 +1,38 @@
 /**
  * Client-side entry points for every on-chain action. The UI only calls these.
  *
- * Phase 1: each function validates its input, waits briefly, and returns a
- * fake signature so the forms can be exercised end to end.
- * Phase 2: replace each TODO with the Anchor call. Signatures and return
- * shapes are meant to stay the same.
+ * With NEXT_PUBLIC_PROGRAMS_LIVE=true they build real transactions against
+ * the strata program and send them through the connected wallet. Otherwise
+ * they return a labelled simulated result so the preview still works.
  */
-import type { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
+import { BN } from "@anchor-lang/core";
+import { ComputeBudgetProgram, Keypair, PublicKey, Transaction, type Connection, type SendOptions, type Signer, type TransactionInstruction } from "@solana/web3.js";
+import { PROGRAMS_LIVE } from "@/lib/config";
 import type { LaunchSettings } from "@/lib/floor";
-import { PROGRAMS } from "@/lib/programs";
+import {
+  ataIx,
+  buyIx,
+  claimCreatorFeesIx,
+  claimVestedIx,
+  creatorBuyIx,
+  initializeLaunchIx,
+  programFor,
+  redeemIx,
+  sellIx,
+  toBase,
+  toLamports,
+} from "./client";
 
 /** The subset of the wallet adapter these calls need. */
 export interface StrataSigner {
   publicKey: PublicKey;
-  signTransaction?: <T extends Transaction | VersionedTransaction>(tx: T) => Promise<T>;
-  sendTransaction?: unknown;
+  sendTransaction?: (tx: Transaction, connection: Connection, options?: SendOptions & { signers?: Signer[] }) => Promise<string>;
+  connection?: Connection;
 }
 
 export interface TxResult {
   signature: string;
-  /** True while these are stubs. The UI shows a "simulated" note. */
+  /** True when the programs aren't live and nothing went on chain. */
   simulated: boolean;
 }
 
@@ -31,36 +44,80 @@ export interface LaunchInput {
   settings: LaunchSettings;
   /** Optional creator first buy, in SOL. Vests per settings.vestingDays. */
   firstBuySol: number;
+  /** Smallest acceptable first-buy output, in tokens (slippage). */
+  minFirstBuyTokens?: number;
 }
 
 const fakeSig = () =>
   Array.from({ length: 88 }, () => "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"[Math.floor(Math.random() * 58)]).join("");
-
 const settle = <T>(value: T, ms = 900) => new Promise<T>((res) => setTimeout(() => res(value), ms));
+
+function live(signer: StrataSigner): asserts signer is Required<StrataSigner> {
+  if (!signer.sendTransaction || !signer.connection) throw new Error("Connect a wallet first.");
+}
+
+async function send(signer: Required<StrataSigner>, ixs: TransactionInstruction[], extra: Signer[] = []): Promise<string> {
+  const { connection } = signer;
+  const tx = new Transaction().add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }), ...ixs);
+  tx.feePayer = signer.publicKey;
+  const latest = await connection.getLatestBlockhash("confirmed");
+  tx.recentBlockhash = latest.blockhash;
+  const signature = await signer.sendTransaction(tx, connection, { signers: extra, skipPreflight: false, preflightCommitment: "confirmed" });
+  const res = await connection.confirmTransaction({ signature, ...latest }, "confirmed");
+  if (res.value.err) throw new Error(`Transaction failed: ${JSON.stringify(res.value.err)}`);
+  return signature;
+}
+
+/** Upload the picture and metadata JSON if an upload backend is configured. */
+async function uploadMetadata(input: LaunchInput): Promise<string> {
+  if (!input.image && !input.description.trim()) return "";
+  const form = new FormData();
+  form.set("name", input.name);
+  form.set("symbol", input.ticker);
+  form.set("description", input.description);
+  if (input.image) form.set("image", input.image);
+  const res = await fetch("/api/upload", { method: "POST", body: form });
+  if (res.status === 501) return ""; // uploads not configured: launch without a picture
+  if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? "Upload failed.");
+  return (await res.json()).uri as string;
+}
 
 export async function launchToken(signer: StrataSigner, input: LaunchInput): Promise<TxResult & { mint: string }> {
   if (!input.name.trim() || !input.ticker.trim()) throw new Error("Name and ticker are required.");
-  // TODO(phase 2): upload image + metadata JSON (Arweave/IPFS), get `uri`.
-  // TODO(phase 2): program.methods
-  //   .initializeLaunch({ name, ticker, uri, reserveShareBps, feeToReserveBps, creatorFeeBps,
-  //                       vestingDays, redemptionDelayHours })
-  //   .accounts({ creator: signer.publicKey, mint, launch: PDA(["launch", mint]),
-  //               vault: PDA(["vault", mint], PROGRAMS.reserve), ... })
-  //   .preInstructions(firstBuySol > 0 ? [buy ix with vesting escrow] : [])
-  //   .signers([mintKeypair]).rpc()
-  void signer;
-  void PROGRAMS.launchpad;
-  return settle({ signature: fakeSig(), simulated: true, mint: fakeSig().slice(0, 44) }, 1400);
+  if (!PROGRAMS_LIVE) return settle({ signature: fakeSig(), simulated: true, mint: fakeSig().slice(0, 44) }, 1400);
+  live(signer);
+  const uri = await uploadMetadata(input);
+  const program = programFor(signer.connection);
+  const mint = Keypair.generate();
+  const s = input.settings;
+  const ixs = [
+    await initializeLaunchIx(program, signer.publicKey, mint.publicKey, {
+      name: input.name.trim(),
+      ticker: input.ticker,
+      uri,
+      reserveShareBps: s.reserveShareBps,
+      feeToReserveBps: s.feeToReserveBps,
+      creatorFeeBps: s.creatorFeeBps,
+      vestingDays: s.vestingDays ?? 0,
+      redemptionDelayHours: s.redemptionDelayHours,
+    }),
+  ];
+  if (input.firstBuySol > 0) {
+    ixs.push(ataIx(signer.publicKey, signer.publicKey, mint.publicKey));
+    ixs.push(await creatorBuyIx(program, signer.publicKey, mint.publicKey, toLamports(input.firstBuySol), toBase(input.minFirstBuyTokens ?? 0)));
+  }
+  const signature = await send(signer, ixs, [mint]);
+  return { signature, simulated: false, mint: mint.publicKey.toBase58() };
 }
 
 export async function buy(signer: StrataSigner, mint: string, solIn: number, minTokensOut: number): Promise<TxResult> {
   if (!(solIn > 0)) throw new Error("Enter an amount of SOL.");
-  // TODO(phase 2): program.methods.buy(new BN(solIn * LAMPORTS_PER_SOL), new BN(minTokensOut))
-  //   .accounts({ buyer, launch, vault, curveVault, creatorFeeAccount, mint, buyerAta }).rpc()
-  void signer;
-  void mint;
-  void minTokensOut;
-  return settle({ signature: fakeSig(), simulated: true });
+  if (!PROGRAMS_LIVE) return settle({ signature: fakeSig(), simulated: true });
+  live(signer);
+  const program = programFor(signer.connection);
+  const m = new PublicKey(mint);
+  const signature = await send(signer, [ataIx(signer.publicKey, signer.publicKey, m), await buyIx(program, signer.publicKey, m, toLamports(solIn), toBase(minTokensOut))]);
+  return { signature, simulated: false };
 }
 
 /**
@@ -69,23 +126,37 @@ export async function buy(signer: StrataSigner, mint: string, solIn: number, min
  */
 export async function sell(signer: StrataSigner, mint: string, tokensIn: number, minSolOut: number): Promise<TxResult> {
   if (!(tokensIn > 0)) throw new Error("Enter an amount of tokens.");
-  // TODO(phase 2): program.methods.sell(new BN(tokensIn), new BN(minSolOut * LAMPORTS_PER_SOL))
-  //   .accounts({ seller, launch, vault, curveVault, mint, sellerAta, redemption: PROGRAMS.redemption }).rpc()
-  void signer;
-  void mint;
-  void minSolOut;
-  return settle({ signature: fakeSig(), simulated: true });
+  if (!PROGRAMS_LIVE) return settle({ signature: fakeSig(), simulated: true });
+  live(signer);
+  const program = programFor(signer.connection);
+  const signature = await send(signer, [await sellIx(program, signer.publicKey, new PublicKey(mint), toBase(tokensIn), toLamports(minSolOut))]);
+  return { signature, simulated: false };
 }
 
 export async function redeemAtFloor(signer: StrataSigner, mint: string, tokens: number, minSolOut: number): Promise<TxResult> {
   if (!(tokens > 0)) throw new Error("Enter an amount of tokens.");
-  // TODO(phase 2): redemption program: burns `tokens` from holderAta and pays
-  //   floor(tokens * vault.lamports / circulating) lamports from the vault PDA.
-  //   program.methods.redeem(new BN(tokens), new BN(minSolOut * LAMPORTS_PER_SOL))
-  //   .accounts({ holder, launch, vault: PDA(["vault", mint], PROGRAMS.reserve), mint, holderAta }).rpc()
-  void signer;
-  void mint;
-  void minSolOut;
-  void PROGRAMS.redemption;
-  return settle({ signature: fakeSig(), simulated: true });
+  if (!PROGRAMS_LIVE) return settle({ signature: fakeSig(), simulated: true });
+  live(signer);
+  const program = programFor(signer.connection);
+  const signature = await send(signer, [await redeemIx(program, signer.publicKey, new PublicKey(mint), toBase(tokens), toLamports(minSolOut))]);
+  return { signature, simulated: false };
 }
+
+export async function claimCreatorFees(signer: StrataSigner, mint: string): Promise<TxResult> {
+  if (!PROGRAMS_LIVE) return settle({ signature: fakeSig(), simulated: true });
+  live(signer);
+  const program = programFor(signer.connection);
+  const signature = await send(signer, [await claimCreatorFeesIx(program, signer.publicKey, new PublicKey(mint))]);
+  return { signature, simulated: false };
+}
+
+export async function claimVested(signer: StrataSigner, mint: string): Promise<TxResult> {
+  if (!PROGRAMS_LIVE) return settle({ signature: fakeSig(), simulated: true });
+  live(signer);
+  const program = programFor(signer.connection);
+  const m = new PublicKey(mint);
+  const signature = await send(signer, [ataIx(signer.publicKey, signer.publicKey, m), await claimVestedIx(program, signer.publicKey, m)]);
+  return { signature, simulated: false };
+}
+
+export { BN };

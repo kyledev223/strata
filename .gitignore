@@ -26,3 +26,6 @@ screenshots/
 target/
 test-ledger/
 .anchor/
+
+# Program test fixtures (dumped from devnet by scripts)
+program/tests/fixtures/*.so

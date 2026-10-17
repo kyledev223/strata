@@ -68,6 +68,12 @@ export interface ReserveState {
   circulating: number;
   /** Highest floor ever recorded. Used as the floor while circulating = 0. */
   floorHwm?: number;
+  /**
+   * Surplus in the reserve vault not yet counted toward the floor. It drips
+   * into the reserve over ~150 slots (spec D2). Quotes treat it as not yet
+   * released, which is conservative: the chain releases it before trading.
+   */
+  pendingSol?: number;
 }
 
 export type PoolState = CurveState & ReserveState & { settings: LaunchSettings };
@@ -90,9 +96,16 @@ function withHwm<T extends ReserveState>(s: T): T {
   const snapped = {
     ...s,
     reserveSol: Math.round(s.reserveSol * LAMPORTS_PER_SOL) / LAMPORTS_PER_SOL,
+    pendingSol: Math.round((s.pendingSol ?? 0) * LAMPORTS_PER_SOL) / LAMPORTS_PER_SOL,
     circulating: Math.round(s.circulating * BASE_UNITS) / BASE_UNITS,
   };
   return { ...snapped, floorHwm: Math.max(s.floorHwm ?? 0, floorOf(snapped)) };
+}
+
+/** Release all pending surplus into the reserve (as if the drip window passed). */
+export function settleDrip<T extends ReserveState>(s: T): T {
+  if (!s.pendingSol || s.circulating <= 0) return s;
+  return withHwm({ ...s, reserveSol: s.reserveSol + s.pendingSol, pendingSol: 0 });
 }
 
 /** Invariant 6: supply is either fully redeemed or comfortably above dust. */
@@ -181,9 +194,13 @@ export function quoteBuy(pool: PoolState, solIn: number) {
 
   const toCurve = net - deposit;
   const required = lamUp(F * tokensOut);
+  // Backing counts toward the floor now; the surplus drips in (unless nothing circulated).
+  const intoVault = deposit + reserveFee;
+  const now = pool.circulating > 0 ? required : intoVault;
   const after: PoolState = withHwm({
     ...pool,
-    reserveSol: pool.reserveSol + deposit + reserveFee,
+    reserveSol: pool.reserveSol + now,
+    pendingSol: (pool.pendingSol ?? 0) + (intoVault - now),
     circulating: pool.circulating + tokensOut,
     virtualSol: pool.virtualSol + toCurve,
     virtualTokens: pool.virtualTokens - tokensOut,
@@ -207,6 +224,8 @@ export function quoteBuy(pool: PoolState, solIn: number) {
     priceAfter: spotPrice(after),
     floorBefore: F,
     floorAfter: requiredFloor(after),
+    /** The floor once this buy's surplus has dripped in (~1 minute). */
+    floorAfterDrip: requiredFloor(settleDrip(after)),
     after,
   };
 }
@@ -226,7 +245,7 @@ export function quoteSell(pool: PoolState, tokensIn: number) {
   const solOut = Math.max(0, gross - creatorFee - reserveFee);
   const after: PoolState = withHwm({
     ...pool,
-    reserveSol: pool.reserveSol + reserveFee,
+    pendingSol: (pool.pendingSol ?? 0) + reserveFee, // fees drip to the holders who stay
     circulating: pool.circulating - amount,
     virtualTokens,
     virtualSol: pool.virtualSol - gross,
@@ -257,9 +276,16 @@ export function redeem<T extends ReserveState>(state: T, tokens: number) {
   const floorBefore = requiredFloor(state);
   // amount x reserve / supply, not amount x floor, to keep precision. Redeeming
   // every token pays out exactly the reserve.
-  const payoutSol =
-    amount === 0 ? 0 : amount === state.circulating ? state.reserveSol : lamDown((amount * state.reserveSol) / state.circulating);
-  const after = withHwm({ ...state, reserveSol: state.reserveSol - payoutSol, circulating: state.circulating - amount });
+  // Redeeming the whole supply also collects any pending surplus, so nothing is orphaned.
+  const all = amount > 0 && amount === state.circulating;
+  const pool = all ? (state.pendingSol ?? 0) : 0;
+  const payoutSol = amount === 0 ? 0 : all ? state.reserveSol + pool : lamDown((amount * state.reserveSol) / state.circulating);
+  const after = withHwm({
+    ...state,
+    reserveSol: all ? 0 : state.reserveSol - payoutSol,
+    pendingSol: all ? 0 : state.pendingSol,
+    circulating: state.circulating - amount,
+  });
   if (amount > 0) assertFloor(state, after, "redeem");
   return { ok: residualOk(after), amount, payoutSol, floorBefore, floorAfter: requiredFloor(after), after };
 }

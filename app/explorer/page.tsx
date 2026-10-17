@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { MintLookup } from "@/components/explorer/MintLookup";
 import { Panel, Plate } from "@/components/ui";
-import { shortAddress, solscanAccount } from "@/lib/format";
-import { PROGRAMS_LIVE } from "@/lib/config";
+import { shortAddress } from "@/lib/format";
+import { explorerUrl, PROGRAMS_LIVE } from "@/lib/config";
 import { PROGRAM_LIST } from "@/lib/programs";
 
 export const metadata: Metadata = { title: "Explorer" };
@@ -27,7 +27,7 @@ export default function ExplorerPage() {
               <div key={p.address}>
                 <dt>{p.name}</dt>
                 <dd>
-                  <a href={solscanAccount(p.address)} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                  <a href={explorerUrl("account", p.address)} target="_blank" rel="noreferrer" className="underline underline-offset-2">
                     {shortAddress(p.address)}
                   </a>
                 </dd>

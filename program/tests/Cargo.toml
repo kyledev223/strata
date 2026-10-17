@@ -1,0 +1,21 @@
+[package]
+name = "strata-tests"
+version = "0.1.0"
+description = "LiteSVM integration tests for the strata program (PROGRAM_SPEC.md §10, layer 5)"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dev-dependencies]
+strata = { path = "../programs/strata", features = ["no-entrypoint"] }
+strata-math = { path = "../crates/strata-math" }
+anchor-lang = { version = "1.2.1", default-features = false, features = ["solana-v4"] }
+anchor-spl = { version = "1.2.1", default-features = false, features = ["solana-v4", "token", "token_2022", "associated_token", "metadata"] }
+litesvm = "0.18"
+# Match the versions LiteSVM 0.18 itself uses (it mixes v3 and v4 crates).
+solana-keypair = "3"
+solana-signer = "3"
+solana-transaction = "4"
+solana-message = "4"
+solana-clock = "3"
+solana-instruction = "3"

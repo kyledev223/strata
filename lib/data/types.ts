@@ -45,6 +45,14 @@ export interface TokenSummary {
   /** Seed for the generated token glyph when there is no image. */
   hue: number;
   image?: string;
+  /** Surplus still dripping into the reserve (SOL). Not yet counted in the floor. */
+  pendingSol?: number;
+  /** Floor high-water mark, used when nothing circulates. */
+  floorHwm?: number;
+  /** Lifetime creator fees, in SOL, and the vesting state of the first buy. */
+  creatorFeesSol?: number;
+  vest?: { totalTokens: number; claimedTokens: number; start: number; days: number };
+  redemptionOpensAt?: number;
 }
 
 export interface PricePoint {

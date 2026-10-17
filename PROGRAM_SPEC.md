@@ -1,17 +1,17 @@
 # Strata program spec (Phase 2, devnet)
 
-Status: **draft for review**. No program code exists yet. Every number in this document was computed with an exact integer model of the algorithms below (lamports and token base units, no floats).
+Status: **implemented and tested; devnet deploy pending funding.** The program lives in `program/`; see §14 for what was built and how it was verified. Worked numbers come from an exact integer model and are asserted by the math crate's tests.
 
-## 0. Decisions needed before code
+## 0. Decisions (all taken as recommended)
 
-| # | Decision | Recommendation |
+| # | Decision | Taken |
 |---|---|---|
 | D1 | One program or four (curve, reserve, redemption, fee router)? | **One program** with internal modules. The floor invariant spans buy, sell and redeem, and a single program can check it in one place with no cross-program trust. See §3. |
 | D2 | Mitigate JIT floor capture (§8, A2) with a surplus drip? | **Yes**, drip the *surplus* above backing into the reserve over 150 slots (about 60 s). Backing still lands immediately, so the floor never dips. |
 | D3 | What happens when the curve runs out of supply (1B tokens)? | Buys stop, sells and redemption continue. **No AMM migration in v1** (§5.2). |
 | D4 | Token metadata mutable after launch? | **Immutable** (`is_mutable = false`), so a name or image can't be swapped after people buy. |
 | D5 | Where does the 0.02 SOL launch fee go? | A hard-coded treasury address. It never touches any vault. |
-| D6 | Show buyers a separate "buy price"? | **Yes.** Near the floor, a buy costs up to about 2x spot (§9). The UI currently shows spot. |
+| D6 | Show buyers a separate "buy price"? | **Yes.** Near the floor, a buy costs up to about 2x spot (§9). The Buy tab shows "You pay per token" and its multiple of spot. |
 
 ## 1. Scope
 
@@ -98,7 +98,7 @@ Every state-changing instruction ends with `check_invariants(before, after)` (§
 
 Runs §6.3. It fails with `FloorDilution` if the deposit is below the backing requirement, `ZeroOutput` if no tokens result, `BelowMinBuy` under the configured minimum, and `Slippage` if the result is below `min_tokens_out`.
 
-Curve exhaustion: if the buy would take `virtual_tokens` below `virtual_tokens_start - max_supply`, fill up to the cap and refund the unused lamports. Status is "complete" while the inventory is zero; sells push tokens back, so it can reopen (D3).
+Curve exhaustion: a buy that would take `virtual_tokens` below `virtual_tokens_start - max_supply` fails with `CurveExhausted`; the UI shows how many tokens are left and sizes the buy. Status is "complete" while the inventory is zero; sells push tokens back, so it can reopen (D3). With the default curve, selling out all 1B tokens takes about 411 SOL into the curve (roughly 550 SOL of buys including reserve shares and fees), which caps the size of any single buy.
 
 ### 5.3 `sell(tokens_in, min_lamports_out)` (routed)
 
@@ -222,8 +222,8 @@ Floor after **4.001926e-7** (up), spot after 7.290358e-7. The buyer paid 1.0775e
 **W5. Routed sell.** W4's starting state, sell 50M tokens (fees 1.5%):
 curve room = **21,552,457.811432** tokens, at which the net marginal price is exactly 4.0e-7, the floor.
 Curve leg: gross 10.638595812 · creator fee 0.053192979 · reserve fee 0.106385959 · seller gets 10.479016874 SOL.
-Redeem leg: 28,447,542.188568 tokens at the risen floor pay 11.887305235 SOL.
-**Total 22.366322109 SOL**, against 20 SOL for redeeming all 50M at the floor. Floor after **4.178676e-7**.
+Redeem leg: 28,447,542.188568 tokens pay **11.881109239 SOL**. The curve leg's reserve fee goes to the drip (D2), so it rewards the holders who stay rather than lifting the floor this seller exits at.
+**Total 22.360126113 SOL**, against 20 SOL for redeeming all 50M at the floor.
 
 **W6. Rounding favours the vault.** `R = 1,000,000,007` lamports, `S = 3,000,000,000` base units (3,000 tokens). Redeem 1,000 tokens:
 exact share 333,333,335.67 → pays **333,333,335**. After: `R = 666,666,672`, `S = 2e9`.
@@ -271,17 +271,19 @@ All numbers from the exact model. The base state is W4's (`R = 204 SOL`, `S = 51
 
 The victim pays at most their slippage over the quote. Most of the attacker's PnL comes from the victim's own price impact, which every earlier holder also gets. Mitigations: 1% default slippage (already in the UI) and, later, an optional private transaction route.
 
-**A2. JIT floor capture (front-run a large buy, redeem right after).** A large buy deposits its reserve share and lifts the floor. A front-runner holding tokens captures a pro-rata slice of that lift.
+**A2. JIT floor capture (front-run a large buy, redeem right after).** A large buy deposits its reserve share and lifts the floor. A front-runner holding tokens could capture a pro-rata slice of that lift.
 
-| Large buy | Front-run 1 SOL | 10 SOL | 100 SOL |
+Two things close it:
+1. **The supply cap.** The pre-implementation model had no cap and showed profit only for buys of roughly 25x the reserve (5,000+ SOL against 204). On the real curve no single buy can exceed about 550 SOL, so those cases can't occur.
+2. **The drip (D2).** Only the *backing* (`ceil(t * F)`) enters `R` immediately; the *surplus* (`deposit - backing + reserve_fee`) is released linearly over 150 slots. The floor never decreases, but capturing the lift means holding through the drip, with price risk, and it can't be done atomically.
+
+Measured on the compiled program (LiteSVM, `attacks::jit_floor_capture_is_unprofitable_with_drip`), attacker buys, whale buys one slot later, attacker redeems one slot after that:
+
+| First buy (reserve size) | Attacker | Whale | Attacker PnL |
 |---|---|---|---|
-| 100 SOL | −0.60 | −6.18 | −75.76 |
-| 1,000 SOL | −0.25 | −2.85 | −55.55 |
-| 5,000 SOL | **+1.39** | **+12.71** | **+37.03** |
-| 20,000 SOL | **+7.56** | **+71.19** | **+384.71** |
-
-It only pays when the large buy is roughly **25x the reserve or more**, which means young launches with small reserves. The fee rate barely matters (2% vs 1% changes PnL by under 3%); the driver is the reserve share. Existing holders lose the slice the attacker takes, and the large buyer isn't harmed beyond their slippage.
-**Mitigation (D2):** put only the *backing* (`ceil(t * F)`) into `R` immediately. Hold the *surplus* (`deposit - backing + reserve_fee`) in `pending_surplus` and release it linearly over 150 slots. The floor still never decreases, but capturing the lift now means holding through the drip, which carries price risk and can't be done atomically in one bundle.
+| 0.5 SOL | 10 SOL | 300 SOL | **−7.86 SOL** |
+| 1 SOL | 50 SOL | 400 SOL | **−43.87 SOL** |
+| 2 SOL | 1 SOL | 150 SOL | **−0.76 SOL** |
 
 **A3. Sandwich around a redemption.** A redemption doesn't move the floor except by round-down dust. In a 123,456,789.123456-token redemption from the base state, `R' * S = 7.8854815019010e25 >= R * S' = 7.8854815018815e25`. There is no price to push. Front-running a redeem with a buy costs fees and earns nothing.
 
@@ -390,4 +392,30 @@ Mainnet is out of scope. When it comes up, the gates are an external audit and *
 - "Curve complete" in the mock means more than 70 SOL in the curve. The spec defines it as zero curve inventory.
 - Show a buy price next to the spot price (D6).
 - Footer program list goes from four placeholders to one program plus the treasury (D1).
-- `lib/floor.ts` already implements §6 in floating point, including top-up, routing, rounding, the high-water mark and the minimum residual. The Layer 2 differential test keeps it matched to the Rust math.
+- `lib/floor.ts` implements §6 in floating point, including top-up, routing, rounding, the high-water mark, the minimum residual and the drip (pending surplus is treated as not yet released, which is conservative). A Rust-vs-TypeScript differential test (Layer 2) is still to do.
+
+## 14. Implementation status
+
+**Code** (`program/`, Anchor 1.2.1, Solana v4 crates):
+- `crates/strata-math`: §6 in exact integers; limits generated at build time from `config/limits.json` (§12).
+- `programs/strata`: 8 instructions (`initialize_launch`, `creator_buy`, `buy`, `sell`, `redeem`, `claim_vested`, `claim_creator_fees`, `sync_reserve`), `check_invariants` at the end of every state-changing instruction, hourly/daily stats rings and `Trade` events for the UI.
+- Program ID `2KXPBww71SmCwdh4MAZ8P8UdpkzmFx8eNFd1437Hbw8s`. The keypair is kept outside the repo.
+- **Built for SBPF v0** (`anchor build --arch v0`). Anchor 1.2 defaults to v3, but SBPFv3 is inactive on devnet and mainnet, so a v3 binary deploys and then never runs. Found by the local-validator test.
+
+**Verification:**
+
+| Layer | Result |
+|---|---|
+| Math unit tests (W1–W8, errors, edge cases) | 10 pass, worked numbers exact |
+| Math properties P1–P5, P7 | pass at 100,000 cases each |
+| LiteSVM integration (lifecycle, vesting, drip, routed sells, redemption, claims, dust, zero supply, delay, slippage, substitution, settings, JIT, donations, vault ownership) | 13 pass |
+| LiteSVM stateful fuzz, invariants re-read from chain state after every tx | 20,357 txs across 60 launches, 0 violations |
+| Local validator + real UI (Playwright, real signatures): launch with vesting, buy, routed sell, redeem, claim fees, projects/redeem/home pages | 23/23 checks, invariants re-read from chain after each tx |
+
+**Compute units** (measured): launch + first buy 150k (one transaction), buy 57k (top-up path), routed sell 111k, redeem 34k. Clients request 400k.
+
+**Not done yet:**
+- Devnet deploy: blocked on devnet SOL (the faucet rate-limited the deploy wallet). `program/scripts/deploy-devnet.sh` does it in one step; it needs about 4–5 SOL (2.0 SOL rent plus a temporary buffer).
+- The 48-hour devnet soak with a watcher (§10, Layer 6).
+- Rust-vs-TypeScript differential test (Layer 2), `cargo-fuzz` target (Layer 3), mutation testing (Layer 4).
+- External audit and an immutable mainnet deploy (§11).

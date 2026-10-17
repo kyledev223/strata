@@ -26,6 +26,8 @@
   },
 
   "launch": {
+    "$treasury": "Receives the launch fee. Devnet: the deploy wallet. Replace before mainnet.",
+    "treasury": "HSvcPoLcbTX7d2xSLU1HWDvNnqBPbhFDT64weAWnNBfT",
     "launchFeeSol": 0.02,
     "firstBuyMaxSol": 50,
     "firstBuyDefaultSol": 1
@@ -33,6 +35,8 @@
 
   "trade": {
     "minBuySol": 0.001,
-    "defaultSlippageBps": 100
+    "defaultSlippageBps": 100,
+    "$dripSlots": "Surplus above backing is released into the reserve linearly over this many slots (~0.4 s each). See PROGRAM_SPEC D2.",
+    "dripSlots": 150
   }
 }

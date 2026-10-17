@@ -8,6 +8,7 @@ import {
   effectivePrice,
   floorOf,
   freshPool,
+  settleDrip,
   quoteBuy,
   quoteExit,
   type LaunchSettings,
@@ -118,6 +119,7 @@ function simulate(seed: Seed, index: number): Sim {
     const t = createdAt + Math.round(span * Math.pow(p, 0.85));
     // Buy pressure eases from the early mood to the late mood, with some noise.
     const buyBias = seed.mood[0] + (seed.mood[1] - seed.mood[0]) * p + (r() - 0.5) * 0.25;
+    pool = settleDrip(pool); // time passes between trades; the drip has landed
     const before = floorOf(pool);
     const wallet = Math.floor(r() * (40 + seed.trades));
     let kind: TokenActivity["kind"];

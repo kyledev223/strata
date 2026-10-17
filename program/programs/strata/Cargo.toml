@@ -1,0 +1,29 @@
+[package]
+name = "strata"
+version = "0.1.0"
+description = "Strata: Solana launches with an on-chain SOL reserve and a floor that only goes up"
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "strata"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+# Solana v4 crates throughout (LiteSVM 0.18 and Agave 4 use them).
+anchor-lang = { version = "1.2.1", default-features = false, features = ["solana-v4"] }
+anchor-spl = { version = "1.2.1", default-features = false, features = ["solana-v4", "token", "token_2022", "associated_token", "metadata"] }
+strata-math = { path = "../../crates/strata-math" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

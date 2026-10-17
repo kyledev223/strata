@@ -1,6 +1,6 @@
 # Strata
 
-Marketing site and launch UI for Strata, a Solana launchpad where every token has an on-chain SOL reserve and a floor that only goes up.
+Strata is a Solana launchpad where every token has an on-chain SOL reserve and a floor that only goes up. This repo has the website (Next.js) and the on-chain program (Anchor, in `program/`).
 
 ```
 floor = reserve_SOL / circulating_supply
@@ -16,7 +16,7 @@ npm run typecheck
 npm run lint
 ```
 
-Copy `.env.example` to `.env.local` to set the RPC endpoint or switch data sources.
+Copy `.env.example` to `.env.local` to choose the cluster, RPC and data source. With no env at all the site runs on sample data in preview mode.
 
 ## Layout
 
@@ -28,35 +28,46 @@ Copy `.env.example` to `.env.local` to set the RPC endpoint or switch data sourc
 | `components/art/` | Original SVG figures: hero plinth, Fig. 1 charts, Fig. 2 pictograms |
 | `components/home/` | Homepage sections, including the Fig. 3 floor calculator |
 | `components/token/` | Token card, glyph, sparkline, price/floor chart, trade panel |
-| `lib/floor.ts` | Floor math: `quoteBuy`, `quoteSell`, `quoteExit`, `redeem`, `startingFloor` |
-| `lib/data/` | `StrataDataSource` interface, deterministic mock, RPC stub |
-| `lib/strata/actions.ts` | `launchToken`, `buy`, `sell`, `redeemAtFloor` stubs with Anchor TODOs |
-| `lib/programs.ts` | Program IDs (placeholders) |
+| `lib/floor.ts` | Floor math for quotes, mirroring the program: `quoteBuy`, `quoteExit`, `redeem`, `startingFloor` |
+| `lib/data/` | `StrataDataSource` interface, deterministic mock, and `rpc.ts`, which reads the program directly |
+| `lib/strata/` | `client.ts` (PDAs, instruction builders), `actions.ts` (transactions), `idl/` (generated) |
+| `lib/programs.ts` | Addresses shown on the site (program ID from the IDL, treasury from config) |
+| `app/api/` | `upload` (Pinata), `holdings` (a wallet's Strata tokens) |
+| `program/` | The Anchor workspace: `crates/strata-math`, `programs/strata`, `tests`, `scripts` |
+| `PROGRAM_SPEC.md` | The program spec, decisions, attack analysis and test results |
 
-## Swapping in real data
+## The program
 
-Everything the UI reads goes through `getDataSource()` in `lib/data/index.ts`. Set
-`NEXT_PUBLIC_STRATA_DATA=rpc` and implement the four methods in `lib/data/rpc.ts`; each has a
-comment naming the accounts it should read. Return shapes match the mock, so no UI changes
-are needed.
+```
+program/
+  crates/strata-math   exact integer floor math + property tests (limits generated from config/limits.json)
+  programs/strata      the Anchor program
+  tests                LiteSVM integration tests + stateful fuzz
+  scripts              build.sh, test.sh, localnet.sh, deploy-devnet.sh, fetch-fixtures.sh
+```
 
-## Wiring the programs (phase 2)
+Needs Linux or WSL with Rust, the Solana/Agave CLI and Anchor 1.2.1.
 
-Search for `TODO(phase 2)`. The forms already call `lib/strata/actions.ts` with validated
-input and slippage limits; replace each stub body with the Anchor call. Program IDs in
-`lib/programs.ts` are freshly generated placeholder keys with nothing deployed at them.
+```bash
+cd program
+scripts/build.sh          # anchor build --arch v0, copies the IDL into lib/strata/idl
+scripts/test.sh           # math properties + LiteSVM integration tests
+scripts/localnet.sh       # local validator with strata + Metaplex on :8899
+scripts/deploy-devnet.sh  # needs the program keypair and ~5 devnet SOL
+```
 
-## Protocol rules the UI assumes
+Build for **SBPF v0**. Anchor 1.2 defaults to v3, which devnet and mainnet don't run yet.
 
-These are encoded in `lib/floor.ts` and should match the programs:
+## Protocol rules
 
-- **Buys** never dilute the floor: the reserve deposit is the larger of the reserve share and
-  `floor × tokens minted`.
-- **Sells** route to whichever pays more: the curve until its price reaches the floor, then
-  redemption at the floor for the rest, in one transaction. So price can't trade below the floor.
-- **Redemption** pays `tokens × floor`, rounded down to the lamport, and burns the tokens. It has no fee.
-- **Fees to reserve** only add SOL, so the floor only rises.
-- Launch fee is shown as 0.02 SOL plus rent (placeholder).
+Enforced by the program and mirrored in `lib/floor.ts` (details in `PROGRAM_SPEC.md`):
+
+- **Buys** back every new token at the floor, or fail.
+- **Sells** go to the curve while it pays at least the floor after fees; the rest is redeemed in the same transaction.
+- **Redemption** pays `tokens × reserve / supply`, rounded down to the lamport, and burns the tokens. No fee.
+- **Fees** are taken in SOL and never come from the reserve. Surplus above backing drips into the reserve over ~150 slots.
+- **The floor never decreases**: checked on chain at the end of every instruction.
+- After any trade, circulating supply is zero or at least 1,000 tokens.
 
 ## Deploying a preview
 
@@ -66,9 +77,13 @@ Vercel is the simplest host (any Node host that runs `next start` works). Set th
 |---|---|---|
 | `PREVIEW_PASSWORD` | any string | Optional. Every page asks for it (any username). Icons, build assets and `robots.txt` stay public. Unset = no gate. |
 | `NEXT_PUBLIC_SITE_URL` | `https://your-domain` | Absolute URLs for share cards, the sitemap and robots.txt. Falls back to the Vercel production URL. |
-| `NEXT_PUBLIC_SOLANA_RPC` | RPC URL | Use a paid endpoint before real traffic; the public one rate-limits. |
-| `NEXT_PUBLIC_STRATA_DATA` | `mock` / `rpc` | Leave `mock` until `lib/data/rpc.ts` is implemented. |
-| `NEXT_PUBLIC_PROGRAMS_LIVE` | `false` / `true` | `true` only once the programs are deployed. |
+| `NEXT_PUBLIC_SOLANA_CLUSTER` | `devnet` / `mainnet-beta` / `localnet` | Which cluster; explorer links follow it. |
+| `NEXT_PUBLIC_SOLANA_RPC` | RPC URL | Defaults to the cluster's public RPC. Use a paid one for anything public. |
+| `NEXT_PUBLIC_STRATA_DATA` | `mock` / `rpc` | `rpc` reads the program on the cluster above. |
+| `NEXT_PUBLIC_PROGRAMS_LIVE` | `false` / `true` | `true` once the program is deployed on that cluster. |
+| `PINATA_JWT`, `PINATA_GATEWAY` | Pinata credentials | Optional. Enables token picture uploads. |
+
+**Going live on devnet:** deploy the program (`program/scripts/deploy-devnet.sh`), then set `NEXT_PUBLIC_SOLANA_CLUSTER=devnet`, `NEXT_PUBLIC_STRATA_DATA=rpc`, `NEXT_PUBLIC_PROGRAMS_LIVE=true` and a devnet RPC, and redeploy the site.
 
 While the data is `mock` or the programs aren't live, the site is in **preview mode**:
 - A notice runs across the top of every page.

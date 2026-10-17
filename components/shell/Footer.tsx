@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { IconGitHub, IconX, StrataMark } from "@/components/icons";
-import { shortAddress, solscanAccount } from "@/lib/format";
-import { PROGRAMS_LIVE } from "@/lib/config";
-import { isRealLink, LINKS, PROGRAM_LIST } from "@/lib/programs";
+import { shortAddress } from "@/lib/format";
+import { explorerUrl, PROGRAMS_LIVE } from "@/lib/config";
+import { CLUSTER_LABEL, isRealLink, LINKS, PROGRAM_LIST } from "@/lib/programs";
 import { PRIMARY_NAV, SECONDARY_NAV } from "./nav";
 
 export function Footer() {
@@ -39,7 +39,7 @@ export function Footer() {
         </nav>
 
         <div className="md:col-span-6 lg:col-span-3 lg:col-start-10">
-          <p className="mb-3 font-mono text-xs font-medium tracking-[0.02em] opacity-75">{PROGRAMS_LIVE ? "Programs on mainnet" : "Programs"}</p>
+          <p className="mb-3 font-mono text-xs font-medium tracking-[0.02em] opacity-75">{PROGRAMS_LIVE ? `On ${CLUSTER_LABEL}` : "Programs"}</p>
           {!PROGRAMS_LIVE ? (
             <p className="max-w-[24rem] text-[15px] leading-normal opacity-85">
               Program addresses will be listed here, each linked to Solscan, once the programs are deployed.
@@ -49,7 +49,7 @@ export function Footer() {
             {PROGRAM_LIST.map((p) => (
               <li key={p.address}>
                 <a
-                  href={solscanAccount(p.address)}
+                  href={explorerUrl("account", p.address)}
                   target="_blank"
                   rel="noreferrer"
                   className="group flex min-h-8 items-baseline py-1.5 no-underline pointer-coarse:min-h-10 pointer-coarse:py-2.5"
@@ -62,7 +62,7 @@ export function Footer() {
                   </span>
                   <span className="sr-only">
                     {" "}
-                    program {p.address}, on Solscan (opens in a new tab)
+                    {p.address}, on the explorer (opens in a new tab)
                   </span>
                 </a>
               </li>

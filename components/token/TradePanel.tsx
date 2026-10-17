@@ -1,15 +1,17 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { IconBurn } from "@/components/icons";
+import { IconArrowUpRight, IconBurn } from "@/components/icons";
 import { cx, SolPrice } from "@/components/ui";
+import { useBalances, useNow, useStrataSigner } from "@/components/wallet/useStrata";
 import { useWalletDialog } from "@/components/wallet/WalletProviders";
+import { explorerUrl } from "@/lib/config";
 import type { TokenSummary } from "@/lib/data/types";
 import { curveInventory, floorOf, MIN_CIRCULATING, quoteBuy, quoteExit, redeem, type PoolState } from "@/lib/floor";
 import { LIMITS } from "@/lib/limits";
 import { formatCompact, formatNumber, formatPct, formatSol, shortAddress } from "@/lib/format";
-import { buy, redeemAtFloor, sell, type TxResult } from "@/lib/strata/actions";
+import { buy, redeemAtFloor, sell, type StrataSigner, type TxResult } from "@/lib/strata/actions";
 
 type Tab = "buy" | "sell" | "redeem";
 const TABS: { key: Tab; label: string }[] = [
@@ -25,7 +27,14 @@ export function TradePanel({ token, asOf, initialTab = "buy" }: { token: TokenSu
   const ids = useId();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const pool: PoolState = useMemo(
-    () => ({ ...token.curve, reserveSol: token.reserveSol, circulating: token.circulating, floorHwm: token.floorSol, settings: token.settings }),
+    () => ({
+      ...token.curve,
+      reserveSol: token.reserveSol,
+      pendingSol: token.pendingSol ?? 0,
+      circulating: token.circulating,
+      floorHwm: token.floorHwm ?? token.floorSol,
+      settings: token.settings,
+    }),
     [token],
   );
 
@@ -76,10 +85,16 @@ export function TradePanel({ token, asOf, initialTab = "buy" }: { token: TokenSu
 
 /* ------------------------------------------------------------------ */
 
-function useDemoBalance(token: TokenSummary) {
-  const { publicKey } = useWallet();
-  // TODO(phase 2): read the holder's token account for this mint instead.
-  return publicKey ? { tokens: Math.round(token.circulating * 0.004), sol: 12.5 } : null;
+function useTokenBalance(token: TokenSummary) {
+  return useBalances(token.mint, Math.round(token.circulating * 0.004));
+}
+
+function balanceLabel(amount: string, demo: boolean) {
+  return `Balance ${amount}${demo ? " (demo)" : ""}`;
+}
+
+function redemptionOpensAt(token: TokenSummary) {
+  return token.redemptionOpensAt ?? token.createdAt + token.settings.redemptionDelayHours * 3_600_000;
 }
 
 function AmountField({
@@ -135,17 +150,20 @@ function Submit({
   variant = "primary",
   run,
   note,
+  onDone,
 }: {
   label: ReactNode;
   disabled?: boolean;
   variant?: "primary" | "ink";
-  run: (signer: { publicKey: NonNullable<ReturnType<typeof useWallet>["publicKey"]> }) => Promise<TxResult>;
+  run: (signer: StrataSigner) => Promise<TxResult>;
   note?: ReactNode;
+  onDone?: () => void;
 }) {
-  const { publicKey } = useWallet();
+  const signer = useStrataSigner();
+  const router = useRouter();
   const { open } = useWalletDialog();
   const [state, setState] = useState<{ busy?: boolean; ok?: TxResult; err?: string }>({});
-  if (!publicKey) {
+  if (!signer) {
     return (
       <button type="button" className="btn btn-primary btn-lg btn-block" onClick={open}>
         Connect a wallet
@@ -161,7 +179,12 @@ function Submit({
         onClick={async () => {
           setState({ busy: true });
           try {
-            setState({ ok: await run({ publicKey }) });
+            const ok = await run(signer);
+            setState({ ok });
+            if (!ok.simulated) {
+              onDone?.();
+              router.refresh();
+            }
           } catch (e) {
             setState({ err: e instanceof Error ? e.message : "Something went wrong." });
           }
@@ -173,8 +196,16 @@ function Submit({
       <div aria-live="polite" className="min-h-0">
         {state.ok && (
           <p className="rounded-[4px] bg-[var(--accent-soft)] px-3 py-2 font-mono text-xs leading-5">
-            Sent {shortAddress(state.ok.signature, 6)}
-            {state.ok.simulated && <span className="block text-muted">Simulated: the programs aren&rsquo;t deployed yet.</span>}
+            {state.ok.simulated ? (
+              <>
+                Sent {shortAddress(state.ok.signature, 6)}
+                <span className="block text-muted">Simulated: the programs aren&rsquo;t deployed yet.</span>
+              </>
+            ) : (
+              <a href={explorerUrl("tx", state.ok.signature)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline underline-offset-2">
+                Confirmed {shortAddress(state.ok.signature, 6)} <IconArrowUpRight size={12} />
+              </a>
+            )}
           </p>
         )}
         {state.err && <p className="rounded-[4px] bg-[var(--accent-2-soft)] px-3 py-2 text-sm font-semibold text-rust">{state.err}</p>}
@@ -197,7 +228,7 @@ function FloorDelta({ before, after }: { before: number; after: number }) {
 
 function BuyForm({ token, pool }: { token: TokenSummary; pool: PoolState }) {
   const [amt, setAmt] = useState("1");
-  const bal = useDemoBalance(token);
+  const { balance: bal, refresh } = useTokenBalance(token);
   const sol = Number(amt) || 0;
   const q = quoteBuy(pool, sol);
   const tooSmall = sol > 0 && sol < LIMITS.trade.minBuySol;
@@ -210,7 +241,7 @@ function BuyForm({ token, pool }: { token: TokenSummary; pool: PoolState }) {
         unit="SOL"
         value={amt}
         onChange={setAmt}
-        aside={bal ? `Balance ${formatSol(bal.sol)} (demo)` : undefined}
+        aside={bal ? balanceLabel(formatSol(bal.sol), bal.demo) : undefined}
         presets={["0.1", "0.5", "1", "5"].map((v) => ({ label: `${v} SOL`, value: v }))}
       />
       <dl className="quote">
@@ -218,6 +249,13 @@ function BuyForm({ token, pool }: { token: TokenSummary; pool: PoolState }) {
           <dt>You receive</dt>
           <dd>
             {formatCompact(q.tokensOut)} {token.ticker}
+          </dd>
+        </div>
+        <div>
+          <dt>You pay per token</dt>
+          <dd>
+            <SolPrice value={q.avgPrice} unit={false} />
+            {q.priceAfter > 0 && <span className="ml-1.5 text-xs text-muted">{(q.avgPrice / Math.max(pool.virtualSol / pool.virtualTokens, 1e-18)).toFixed(2)}× spot</span>}
           </dd>
         </div>
         <div>
@@ -243,8 +281,9 @@ function BuyForm({ token, pool }: { token: TokenSummary; pool: PoolState }) {
       </dl>
       <Submit
         label={`Buy ${token.ticker}`}
-        disabled={sol <= 0 || tooSmall || !q.ok || overCap}
+        disabled={sol <= 0 || tooSmall || !q.ok || overCap || (!!bal && !bal.demo && sol > bal.sol)}
         run={(s) => buy(s, token.mint, sol, q.tokensOut * (1 - SLIPPAGE))}
+        onDone={refresh}
         note={
           left <= 0 ? (
             <p className="text-xs font-semibold text-rust">Curve complete: all {formatCompact(LIMITS.token.maxSupplyTokens)} tokens are out. Sell or redeem instead.</p>
@@ -267,10 +306,11 @@ function BuyForm({ token, pool }: { token: TokenSummary; pool: PoolState }) {
 }
 
 function SellForm({ token, pool, asOf }: { token: TokenSummary; pool: PoolState; asOf: number }) {
-  const bal = useDemoBalance(token);
-  const [amt, setAmt] = useState(() => String(bal ? Math.round(bal.tokens / 2) : 1_000_000));
+  const { balance: bal, refresh } = useTokenBalance(token);
+  const [amt, setAmt] = useState("1000000");
   const tokens = Number(amt) || 0;
-  const redemptionOpen = asOf >= token.createdAt + token.settings.redemptionDelayHours * 3_600_000;
+  const now = useNow();
+  const redemptionOpen = Math.max(asOf, now) >= redemptionOpensAt(token);
   const q = quoteExit(pool, tokens, redemptionOpen);
   const max = bal?.tokens ?? 0;
   return (
@@ -280,10 +320,10 @@ function SellForm({ token, pool, asOf }: { token: TokenSummary; pool: PoolState;
         unit={token.ticker}
         value={amt}
         onChange={setAmt}
-        aside={bal ? `Balance ${formatCompact(max)} (demo)` : undefined}
+        aside={bal ? balanceLabel(formatCompact(max), bal.demo) : undefined}
         presets={
-          bal
-            ? [0.25, 0.5, 1].map((f) => ({ label: f === 1 ? "Max" : `${f * 100}%`, value: String(Math.floor(max * f)) }))
+          bal && max > 0
+            ? [0.25, 0.5, 1].map((f) => ({ label: f === 1 ? "Max" : `${f * 100}%`, value: String(f === 1 ? max : Math.floor(max * f)) }))
             : ["1M", "10M", "50M"].map((l) => ({ label: l, value: String(parseInt(l) * 1e6) }))
         }
       />
@@ -317,8 +357,9 @@ function SellForm({ token, pool, asOf }: { token: TokenSummary; pool: PoolState;
       </dl>
       <Submit
         label={`Sell ${token.ticker}`}
-        disabled={tokens <= 0 || !q.ok}
+        disabled={tokens <= 0 || !q.ok || (!!bal && !bal.demo && tokens > bal.tokens)}
         run={(s) => sell(s, token.mint, tokens, q.solOut * (1 - SLIPPAGE))}
+        onDone={refresh}
         note={
           q.blocked ? (
             <p className="text-xs font-semibold text-rust">
@@ -339,12 +380,13 @@ function SellForm({ token, pool, asOf }: { token: TokenSummary; pool: PoolState;
 }
 
 function RedeemForm({ token, pool, asOf }: { token: TokenSummary; pool: PoolState; asOf: number }) {
-  const bal = useDemoBalance(token);
-  const [amt, setAmt] = useState(() => String(bal ? bal.tokens : 1_000_000));
+  const { balance: bal, refresh } = useTokenBalance(token);
+  const [amt, setAmt] = useState("1000000");
   const tokens = Number(amt) || 0;
   const r = redeem(pool, tokens);
-  const opensAt = token.createdAt + token.settings.redemptionDelayHours * 3_600_000;
-  const open = asOf >= opensAt;
+  const opensAt = redemptionOpensAt(token);
+  const now = useNow();
+  const open = Math.max(asOf, now) >= opensAt;
   const max = bal?.tokens ?? 0;
   return (
     <div className="grid gap-4">
@@ -361,10 +403,10 @@ function RedeemForm({ token, pool, asOf }: { token: TokenSummary; pool: PoolStat
         unit={token.ticker}
         value={amt}
         onChange={setAmt}
-        aside={bal ? `Balance ${formatCompact(max)} (demo)` : undefined}
+        aside={bal ? balanceLabel(formatCompact(max), bal.demo) : undefined}
         presets={
-          bal
-            ? [0.25, 0.5, 1].map((f) => ({ label: f === 1 ? "Max" : `${f * 100}%`, value: String(Math.floor(max * f)) }))
+          bal && max > 0
+            ? [0.25, 0.5, 1].map((f) => ({ label: f === 1 ? "Max" : `${f * 100}%`, value: String(f === 1 ? max : Math.floor(max * f)) }))
             : ["1M", "10M", "50M"].map((l) => ({ label: l, value: String(parseInt(l) * 1e6) }))
         }
       />
@@ -391,8 +433,9 @@ function RedeemForm({ token, pool, asOf }: { token: TokenSummary; pool: PoolStat
       <Submit
         variant="ink"
         label="Redeem at the floor"
-        disabled={!open || tokens <= 0 || !r.ok}
+        disabled={!open || tokens <= 0 || !r.ok || (!!bal && !bal.demo && tokens > bal.tokens)}
         run={(s) => redeemAtFloor(s, token.mint, tokens, r.payoutSol)}
+        onDone={refresh}
         note={
           open && !r.ok ? (
             <p className="text-xs font-semibold text-rust">{REDEMPTION_HOLD}</p>

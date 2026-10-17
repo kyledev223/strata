@@ -30,8 +30,8 @@ export interface Limits {
     vestingDays: Range;
     redemptionDelayHours: { options: number[]; default: number };
   };
-  launch: { launchFeeSol: number; firstBuyMaxSol: number; firstBuyDefaultSol: number };
-  trade: { minBuySol: number; defaultSlippageBps: number };
+  launch: { treasury: string; launchFeeSol: number; firstBuyMaxSol: number; firstBuyDefaultSol: number };
+  trade: { minBuySol: number; defaultSlippageBps: number; dripSlots: number };
 }
 
 export const LIMITS: Limits = raw;

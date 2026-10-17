@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Plate } from "@/components/ui";
-import { shortAddress, solscanAccount } from "@/lib/format";
+import { shortAddress } from "@/lib/format";
 import { bpsToPct, LIMITS } from "@/lib/limits";
-import { PROGRAMS_LIVE } from "@/lib/config";
+import { explorerUrl, PROGRAMS_LIVE } from "@/lib/config";
 import { PROGRAM_LIST } from "@/lib/programs";
 
 const S = LIMITS.settings;
@@ -153,7 +153,7 @@ a buy that creates t tokens:
             {PROGRAM_LIST.map((p) => (
               <li key={p.address} className="hairline-top flex items-baseline justify-between gap-4 py-2.5">
                 <span className="font-semibold">{p.name}</span>
-                <a href={solscanAccount(p.address)} target="_blank" rel="noreferrer" className="font-mono text-sm underline underline-offset-2">
+                <a href={explorerUrl("account", p.address)} target="_blank" rel="noreferrer" className="font-mono text-sm underline underline-offset-2">
                   {shortAddress(p.address, 6)}
                 </a>
               </li>

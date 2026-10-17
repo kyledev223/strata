@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { IconArrowRight, IconImage } from "@/components/icons";
+import Link from "next/link";
+import { IconArrowRight, IconArrowUpRight, IconImage } from "@/components/icons";
 import { FloorGauge } from "@/components/token/Spark";
 import { TokenCard } from "@/components/token/TokenCard";
 import { cx, Panel, SolPrice } from "@/components/ui";
+import { useStrataSigner } from "@/components/wallet/useStrata";
 import { useWalletDialog } from "@/components/wallet/WalletProviders";
+import { explorerUrl, PROGRAMS_LIVE } from "@/lib/config";
 import { freshPool, quoteBuy, startingFloor, type LaunchSettings } from "@/lib/floor";
 import { formatBps, formatCompact, formatPct, formatSol, shortAddress } from "@/lib/format";
 import { bpsToPct, LIMITS } from "@/lib/limits";
@@ -91,8 +93,9 @@ export function LaunchForm() {
   const [d, setD] = useState<Draft>(initial);
   const [step, setStep] = useState<Step>(1);
   const [tried, setTried] = useState<Set<Step>>(new Set());
-  const [result, setResult] = useState<{ busy?: boolean; mint?: string; sig?: string; err?: string }>({});
-  const { publicKey } = useWallet();
+  const [result, setResult] = useState<{ busy?: boolean; mint?: string; sig?: string; simulated?: boolean; err?: string }>({});
+  const signer = useStrataSigner();
+  const publicKey = signer?.publicKey ?? null;
   const { open } = useWalletDialog();
   const mainRef = useRef<HTMLDivElement>(null);
 
@@ -117,14 +120,20 @@ export function LaunchForm() {
   };
 
   const submit = async () => {
-    if (!publicKey) return open();
+    if (!signer) return open();
     setResult({ busy: true });
     try {
-      const r = await launchToken(
-        { publicKey },
-        { name: d.name.trim(), ticker: d.ticker, description: d.description.trim(), image: d.image, settings, firstBuySol: d.firstBuySol },
-      );
-      setResult({ mint: r.mint, sig: r.signature });
+      const r = await launchToken(signer, {
+        name: d.name.trim(),
+        ticker: d.ticker,
+        description: d.description.trim(),
+        image: d.image,
+        settings,
+        firstBuySol: d.firstBuySol,
+        // Nothing can trade before the first buy, but keep a slippage limit anyway.
+        minFirstBuyTokens: firstBuy ? firstBuy.tokensOut * (1 - LIMITS.trade.defaultSlippageBps / 10_000) : 0,
+      });
+      setResult({ mint: r.mint, sig: r.signature, simulated: r.simulated });
     } catch (e) {
       setResult({ err: e instanceof Error ? e.message : "The launch failed." });
     }
@@ -393,11 +402,23 @@ export function LaunchForm() {
             <div aria-live="polite" className="mt-5">
               {result.mint && (
                 <div className="rounded-[6px] border border-accent bg-[var(--accent-soft)] px-4 py-3">
-                  <p className="font-semibold">Launch sent.</p>
+                  <p className="font-semibold">{result.simulated ? "Launch sent." : "Launched."}</p>
                   <p className="mt-1 font-mono text-xs leading-5">
                     mint {shortAddress(result.mint, 6)} · sig {shortAddress(result.sig ?? "", 6)}
-                    <span className="block text-muted">Simulated: the programs aren&rsquo;t deployed yet, so nothing went on chain.</span>
+                    {result.simulated ? (
+                      <span className="block text-muted">Simulated: the programs aren&rsquo;t deployed yet, so nothing went on chain.</span>
+                    ) : null}
                   </p>
+                  {!result.simulated && (
+                    <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold">
+                      <Link href={`/token/${result.mint}`} className="inline-flex items-center gap-1 text-accent underline underline-offset-4">
+                        Open your token <IconArrowRight size={14} />
+                      </Link>
+                      <a href={explorerUrl("tx", result.sig ?? "")} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline underline-offset-4">
+                        Transaction <IconArrowUpRight size={14} />
+                      </a>
+                    </p>
+                  )}
                 </div>
               )}
               {result.err && <p className="rounded-[4px] bg-[var(--accent-2-soft)] px-3 py-2 text-sm font-semibold text-rust">{result.err}</p>}
@@ -585,6 +606,17 @@ function SliderField({
 function ImageDrop({ file, preview, error, onFile }: { file: File | null; preview: string | null; error?: string; onFile: (f: File | null) => void }) {
   const id = useId();
   const [over, setOver] = useState(false);
+  const [uploads, setUploads] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/upload")
+      .then((r) => r.json())
+      .then((j) => !cancelled && setUploads(Boolean(j.enabled)))
+      .catch(() => !cancelled && setUploads(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   return (
     <div className="grid content-start gap-2">
       <p className="field-label" id={`${id}-label`}>
@@ -629,7 +661,10 @@ function ImageDrop({ file, preview, error, onFile }: { file: File | null; previe
       </label>
       <div className="flex items-center justify-between gap-2">
         <p id={`${id}-hint`} className={error ? "text-sm font-semibold text-rust" : "field-help"}>
-          {error ?? `PNG, JPG, GIF or WebP, ${MAX_IMAGE / 1024 / 1024} MB max. Square works best.`}
+          {error ??
+            (uploads === false && PROGRAMS_LIVE
+              ? "Picture uploads aren't set up on this site yet, so your token will use a generated picture."
+              : `PNG, JPG, GIF or WebP, ${MAX_IMAGE / 1024 / 1024} MB max. Square works best.`)}
         </p>
         {file && (
           <button type="button" className="btn btn-ghost btn-sm flex-none" onClick={() => onFile(null)}>
