@@ -1,4 +1,5 @@
 import { LiveBadge, Panel, Stat, StatGrid } from "@/components/ui";
+import { SAMPLE_DATA } from "@/lib/config";
 import { getDataSource } from "@/lib/data";
 import { formatCompact, formatNumber, formatSol } from "@/lib/format";
 
@@ -8,7 +9,7 @@ export async function Ledger() {
   const size = "clamp(18px, 2.2vw + 6px, 28px)";
   return (
     <div className="mt-10 grid min-w-0 grid-cols-1 gap-x-6 gap-y-5 min-[68rem]:grid-cols-2">
-      <Panel title="On Strata now" titleId="ledger-now" actions={<LiveBadge />}>
+      <Panel title="On Strata now" titleId="ledger-now" actions={SAMPLE_DATA ? <span className="font-mono text-xs font-medium text-muted">Sample data</span> : <LiveBadge />}>
         <StatGrid min={140}>
           <Stat size={size} label="Launches" value={formatNumber(stats.now.launches)} />
           <Stat size={size} label="SOL in reserves" value={formatSol(stats.now.reserveSol)} tone="accent" />

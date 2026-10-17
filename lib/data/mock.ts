@@ -4,6 +4,7 @@
  * the UI uses (lib/floor.ts), so prices, floors and reserves stay consistent.
  */
 import {
+  curveInventory,
   effectivePrice,
   floorOf,
   freshPool,
@@ -108,7 +109,6 @@ function simulate(seed: Seed, index: number): Sim {
   let redeemedSol = 0;
   let feesToReserve = 0;
   let floorRaises = 0;
-  let solIntoCurve = 0;
   let volume24h = 0;
   let price24hAgo = effectivePrice(pool);
   const span = seed.ageHours * HOUR;
@@ -136,15 +136,12 @@ function simulate(seed: Seed, index: number): Sim {
       const q = quoteBuy(pool, sol);
       pool = q.after;
       feesToReserve += q.reserveFee;
-      solIntoCurve += q.toCurve;
       tokens = q.tokensOut;
       kind = "buy";
       buyers.add(wallet);
     } else {
-      const curveSolBefore = pool.virtualSol;
       pool = exit.after;
       feesToReserve += exit.reserveFee;
-      solIntoCurve -= curveSolBefore - pool.virtualSol;
       redeemedTokens += exit.toRedeem;
       redeemedSol += exit.solFromRedeem;
       tokens = exit.tokensIn;
@@ -172,7 +169,7 @@ function simulate(seed: Seed, index: number): Sim {
     creator,
     description: seed.description,
     createdAt,
-    status: solIntoCurve > 70 ? "complete" : "curve",
+    status: curveInventory(pool) <= 0 ? "complete" : "curve",
     priceSol,
     floorSol: floorOf(pool),
     reserveSol: pool.reserveSol,

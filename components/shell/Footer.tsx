@@ -16,7 +16,7 @@ export function Footer() {
             <span className="font-display text-[40px] leading-none font-extrabold tracking-[-0.02em] [font-stretch:76%]">Strata</span>
           </span>
           <p className="mt-5 max-w-[30rem] text-[15px] leading-normal opacity-85">
-            A Solana launchpad where every token holds its own SOL reserve. Redeem at the floor whenever you like. Fees only add to
+            A Solana launchpad where every token holds its own SOL reserve. Redeem at the floor whenever redemption is open. Fees only add to
             the reserve, so the floor only climbs.
           </p>
         </div>

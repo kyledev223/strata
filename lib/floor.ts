@@ -115,6 +115,11 @@ export function spotPrice({ virtualSol, virtualTokens }: CurveState): number {
   return virtualTokens > 0 ? virtualSol / virtualTokens : 0;
 }
 
+/** Tokens still available from the curve before max supply. Buys stop at 0 ("curve complete"). */
+export function curveInventory(c: CurveState): number {
+  return Math.max(0, tokDown(c.virtualTokens - (CURVE_START.virtualTokens - TOTAL_SUPPLY)));
+}
+
 /** What a holder can actually get: the curve's price, or the floor if that is higher. */
 export function effectivePrice(pool: CurveState & ReserveState): number {
   return Math.max(spotPrice(pool), requiredFloor(pool));

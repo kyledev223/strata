@@ -6,7 +6,7 @@ import { IconBurn } from "@/components/icons";
 import { cx, SolPrice } from "@/components/ui";
 import { useWalletDialog } from "@/components/wallet/WalletProviders";
 import type { TokenSummary } from "@/lib/data/types";
-import { floorOf, MIN_CIRCULATING, quoteBuy, quoteExit, redeem, type PoolState } from "@/lib/floor";
+import { curveInventory, floorOf, MIN_CIRCULATING, quoteBuy, quoteExit, redeem, type PoolState } from "@/lib/floor";
 import { LIMITS } from "@/lib/limits";
 import { formatCompact, formatNumber, formatPct, formatSol, shortAddress } from "@/lib/format";
 import { buy, redeemAtFloor, sell, type TxResult } from "@/lib/strata/actions";
@@ -201,6 +201,8 @@ function BuyForm({ token, pool }: { token: TokenSummary; pool: PoolState }) {
   const sol = Number(amt) || 0;
   const q = quoteBuy(pool, sol);
   const tooSmall = sol > 0 && sol < LIMITS.trade.minBuySol;
+  const left = curveInventory(pool);
+  const overCap = q.tokensOut > left;
   return (
     <div className="grid gap-4">
       <AmountField
@@ -208,7 +210,7 @@ function BuyForm({ token, pool }: { token: TokenSummary; pool: PoolState }) {
         unit="SOL"
         value={amt}
         onChange={setAmt}
-        aside={bal ? `Balance ${formatSol(bal.sol)}` : undefined}
+        aside={bal ? `Balance ${formatSol(bal.sol)} (demo)` : undefined}
         presets={["0.1", "0.5", "1", "5"].map((v) => ({ label: `${v} SOL`, value: v }))}
       />
       <dl className="quote">
@@ -241,10 +243,14 @@ function BuyForm({ token, pool }: { token: TokenSummary; pool: PoolState }) {
       </dl>
       <Submit
         label={`Buy ${token.ticker}`}
-        disabled={sol <= 0 || tooSmall || !q.ok}
+        disabled={sol <= 0 || tooSmall || !q.ok || overCap}
         run={(s) => buy(s, token.mint, sol, q.tokensOut * (1 - SLIPPAGE))}
         note={
-          tooSmall ? (
+          left <= 0 ? (
+            <p className="text-xs font-semibold text-rust">Curve complete: all {formatCompact(LIMITS.token.maxSupplyTokens)} tokens are out. Sell or redeem instead.</p>
+          ) : overCap ? (
+            <p className="text-xs font-semibold text-rust">Only {formatCompact(left)} tokens are left on the curve. Buy a little less.</p>
+          ) : tooSmall ? (
             <p className="text-xs font-semibold text-rust">The smallest buy is {LIMITS.trade.minBuySol} SOL.</p>
           ) : (
             <p className="text-xs text-muted">

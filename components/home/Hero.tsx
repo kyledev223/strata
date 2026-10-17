@@ -21,7 +21,7 @@ const PARTS = [
   {
     where: "The slot",
     title: "Redemption",
-    body: "Hand tokens back at the floor, whenever you like. They're burned, and the vault pays you in SOL.",
+    body: "Hand tokens back at the floor once redemption opens, from the first block unless the launch set a wait. They're burned, and the vault pays you in SOL.",
   },
 ];
 

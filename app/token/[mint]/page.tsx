@@ -100,7 +100,7 @@ export default async function TokenPage({ params, searchParams }: Props) {
 
         <div className="grid min-w-0 gap-6 lg:col-start-1 lg:row-start-2">
 
-          <Panel title="The reserve" titleId="reserve-title" note="One vault, owned by the reserve program. No key can withdraw from it.">
+          <Panel title="The reserve" titleId="reserve-title" note="One vault per token, owned by the Strata program. No key can withdraw from it.">
             <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
               <Stat label="SOL in reserve" value={formatSol(token.reserveSol)} tone="accent" />
               <Stat label="Circulating" value={formatCompact(token.circulating)} />

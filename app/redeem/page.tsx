@@ -19,7 +19,7 @@ export default async function RedeemPage() {
           <h1 className="type-h1">Hand it back at the floor</h1>
         </div>
         <p className="max-w-[34rem] text-lead text-muted lg:col-span-5 lg:col-start-8 lg:pb-1.5">
-          Any token, any amount, any time after its redemption opens. The tokens burn, the vault pays the floor in SOL, and the
+          Any token, any time after its redemption opens. The tokens burn, the vault pays the floor in SOL, and the
           floor for everyone else stays put.
         </p>
       </header>

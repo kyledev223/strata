@@ -6,6 +6,7 @@ import { IconArrowRight } from "@/components/icons";
 import { TokenGlyph } from "@/components/token/TokenGlyph";
 import { btn, Panel, SolPrice, Stat, StatGrid } from "@/components/ui";
 import { useWalletDialog } from "@/components/wallet/WalletProviders";
+import { SAMPLE_DATA } from "@/lib/config";
 import type { Holding } from "@/lib/data/types";
 import { formatCompact, formatPct, formatSol } from "@/lib/format";
 
@@ -22,18 +23,25 @@ export function Holdings({ holdings, mode }: { holdings: Holding[]; mode: "redee
 
   return (
     <div className="grid grid-cols-1 gap-6">
-      {!publicKey && (
+      {(SAMPLE_DATA || !publicKey) && (
         <div className="well flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm">
-            <strong className="font-semibold">Example holdings.</strong> Connect a wallet to see yours.
+            <strong className="font-semibold">Example holdings.</strong>{" "}
+            {SAMPLE_DATA
+              ? publicKey
+                ? "Your wallet is connected, but reading its balances arrives with the programs."
+                : "Reading wallet balances arrives with the programs."
+              : "Connect a wallet to see yours."}
           </p>
-          <button type="button" className="btn btn-primary btn-sm" onClick={open}>
-            Connect
-          </button>
+          {!publicKey && (
+            <button type="button" className="btn btn-primary btn-sm" onClick={open}>
+              Connect
+            </button>
+          )}
         </div>
       )}
 
-      <Panel title={mode === "redeem" ? "What your tokens are worth at the floor" : "Your holdings"} titleId="holdings-title">
+      <Panel title={SAMPLE_DATA ? "Example holdings" : mode === "redeem" ? "What your tokens are worth at the floor" : "Your holdings"} titleId="holdings-title">
         <StatGrid min={150} className="mb-5">
           <Stat size={24} label="Value at price" value={formatSol(atPrice)} />
           <Stat size={24} label="Value at floor" value={formatSol(atFloor)} tone="accent" hint="what the vaults pay today" />

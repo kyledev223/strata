@@ -4,6 +4,7 @@ import { Archivo, JetBrains_Mono } from "next/font/google";
 import { Header } from "@/components/shell/Header";
 import { Footer } from "@/components/shell/Footer";
 import { Dock } from "@/components/shell/Dock";
+import { PreviewBar } from "@/components/shell/PreviewBar";
 import { WalletProviders } from "@/components/wallet/WalletProviders";
 import "./globals.css";
 
@@ -13,7 +14,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono", dis
 export const metadata: Metadata = {
   title: { default: "Strata: tokens with a floor", template: "%s · Strata" },
   description:
-    "Launch Solana tokens backed by an on-chain SOL reserve. Anyone can redeem at the floor, any time, and the floor only goes up.",
+    "Launch Solana tokens backed by an on-chain SOL reserve. Anyone can redeem at the floor once redemption opens, and the floor only goes up.",
 };
 
 export const viewport: Viewport = {
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <a href="#main" className="skip-link">
             Skip to content
           </a>
+          <PreviewBar />
           <Header />
           <main id="main" tabIndex={-1} className="outline-none">
             {children}
