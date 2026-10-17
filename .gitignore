@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# env files (.env.example is committed)
+.env
+.env*.local
+
+# logs and OS cruft
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# tooling output
+coverage/
+screenshots/
+.vercel/
+
+# phase 2: Anchor / Rust
+target/
+test-ledger/
+.anchor/

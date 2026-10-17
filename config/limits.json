@@ -1,0 +1,38 @@
+{
+  "$comment": "Every tunable protocol limit. Read by the UI through lib/limits.ts. In phase 2 the program's constants are generated from this file, so the two can't drift. Percentages are in basis points (100 bps = 1%).",
+
+  "token": {
+    "decimals": 6,
+    "maxSupplyTokens": 1000000000,
+    "minCirculatingTokens": 1000,
+    "nameMaxChars": 32,
+    "tickerMinChars": 2,
+    "tickerMaxChars": 10,
+    "descriptionMaxChars": 1000,
+    "imageMaxBytes": 4194304
+  },
+
+  "curve": {
+    "virtualSolStart": 30,
+    "virtualTokensStart": 1073000000
+  },
+
+  "settings": {
+    "reserveShareBps": { "min": 500, "max": 6000, "default": 2500 },
+    "feeToReserveBps": { "min": 0, "max": 200, "default": 100 },
+    "creatorFeeBps": { "min": 0, "max": 200, "default": 50 },
+    "vestingDays": { "min": 1, "max": 90, "default": 30 },
+    "redemptionDelayHours": { "options": [0, 1, 6, 24, 72], "default": 0 }
+  },
+
+  "launch": {
+    "launchFeeSol": 0.02,
+    "firstBuyMaxSol": 50,
+    "firstBuyDefaultSol": 1
+  },
+
+  "trade": {
+    "minBuySol": 0.001,
+    "defaultSlippageBps": 100
+  }
+}
