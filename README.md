@@ -58,6 +58,16 @@ scripts/deploy-devnet.sh  # needs the program keypair and ~5 devnet SOL
 
 Build for **SBPF v0**. Anchor 1.2 defaults to v3, which devnet and mainnet don't run yet.
 
+### Mainnet
+
+1. Put the real treasury address in `config/limits.json` (`launch.treasury`). It's compiled into the program.
+2. Fund the CLI wallet (`solana address`) with ~4–5 SOL.
+3. `CONFIRM_MAINNET=yes RPC_URL=<private mainnet RPC> TREASURY_CONFIRM=<treasury> program/scripts/deploy-mainnet.sh`
+   builds, runs every test, records the binary's SHA-256 and deploys. The program stays upgradeable for now.
+4. Set the Vercel variables for `mainnet-beta`, redeploy the site, and smoke-test with small amounts.
+5. `CONFIRM_FINAL=yes RPC_URL=... program/scripts/finalize-mainnet.sh` checks the on-chain binary matches
+   the build and makes the program immutable. **Irreversible**: no fixes after this, by anyone.
+
 ## Protocol rules
 
 Enforced by the program and mirrored in `lib/floor.ts` (details in `PROGRAM_SPEC.md`):

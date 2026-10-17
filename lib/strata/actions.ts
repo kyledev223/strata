@@ -16,6 +16,7 @@ import {
   claimVestedIx,
   creatorBuyIx,
   initializeLaunchIx,
+  pdas,
   programFor,
   redeemIx,
   sellIx,
@@ -56,13 +57,42 @@ function live(signer: StrataSigner): asserts signer is Required<StrataSigner> {
   if (!signer.sendTransaction || !signer.connection) throw new Error("Connect a wallet first.");
 }
 
-async function send(signer: Required<StrataSigner>, ixs: TransactionInstruction[], extra: Signer[] = []): Promise<string> {
+/**
+ * Compute-unit limits per action: measured cost plus headroom (PROGRAM_SPEC §14).
+ * Priority fees are paid per requested unit, so a tight limit keeps them cheap.
+ */
+const CU = { launch: 300_000, buy: 150_000, sell: 200_000, redeem: 100_000, claim: 80_000 } as const;
+const MIN_PRIORITY = 10_000; // micro-lamports per CU
+const MAX_PRIORITY = 2_000_000;
+
+/** A priority fee that lands under congestion: the 75th percentile of recent fees on these accounts, clamped. */
+async function priorityFee(connection: Connection, writable: PublicKey[]): Promise<number> {
+  try {
+    const recent = await connection.getRecentPrioritizationFees({ lockedWritableAccounts: writable });
+    const fees = recent.map((f) => f.prioritizationFee).filter((f) => f > 0).sort((a, b) => a - b);
+    const p75 = fees.length ? fees[Math.floor(fees.length * 0.75)] : 0;
+    return Math.min(Math.max(p75, MIN_PRIORITY), MAX_PRIORITY);
+  } catch {
+    return MIN_PRIORITY;
+  }
+}
+
+async function send(
+  signer: Required<StrataSigner>,
+  ixs: TransactionInstruction[],
+  opts: { units: number; writable: PublicKey[]; extra?: Signer[] },
+): Promise<string> {
   const { connection } = signer;
-  const tx = new Transaction().add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }), ...ixs);
+  const microLamports = await priorityFee(connection, opts.writable);
+  const tx = new Transaction().add(
+    ComputeBudgetProgram.setComputeUnitLimit({ units: opts.units }),
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports }),
+    ...ixs,
+  );
   tx.feePayer = signer.publicKey;
   const latest = await connection.getLatestBlockhash("confirmed");
   tx.recentBlockhash = latest.blockhash;
-  const signature = await signer.sendTransaction(tx, connection, { signers: extra, skipPreflight: false, preflightCommitment: "confirmed" });
+  const signature = await signer.sendTransaction(tx, connection, { signers: opts.extra ?? [], skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 5 });
   const res = await connection.confirmTransaction({ signature, ...latest }, "confirmed");
   if (res.value.err) throw new Error(`Transaction failed: ${JSON.stringify(res.value.err)}`);
   return signature;
@@ -106,7 +136,7 @@ export async function launchToken(signer: StrataSigner, input: LaunchInput): Pro
     ixs.push(ataIx(signer.publicKey, signer.publicKey, mint.publicKey));
     ixs.push(await creatorBuyIx(program, signer.publicKey, mint.publicKey, toLamports(input.firstBuySol), toBase(input.minFirstBuyTokens ?? 0)));
   }
-  const signature = await send(signer, ixs, [mint]);
+  const signature = await send(signer, ixs, { units: CU.launch, writable: [pdas(mint.publicKey).launch], extra: [mint] });
   return { signature, simulated: false, mint: mint.publicKey.toBase58() };
 }
 
@@ -116,7 +146,10 @@ export async function buy(signer: StrataSigner, mint: string, solIn: number, min
   live(signer);
   const program = programFor(signer.connection);
   const m = new PublicKey(mint);
-  const signature = await send(signer, [ataIx(signer.publicKey, signer.publicKey, m), await buyIx(program, signer.publicKey, m, toLamports(solIn), toBase(minTokensOut))]);
+  const signature = await send(signer, [ataIx(signer.publicKey, signer.publicKey, m), await buyIx(program, signer.publicKey, m, toLamports(solIn), toBase(minTokensOut))], {
+    units: CU.buy,
+    writable: [pdas(m).launch],
+  });
   return { signature, simulated: false };
 }
 
@@ -129,7 +162,8 @@ export async function sell(signer: StrataSigner, mint: string, tokensIn: number,
   if (!PROGRAMS_LIVE) return settle({ signature: fakeSig(), simulated: true });
   live(signer);
   const program = programFor(signer.connection);
-  const signature = await send(signer, [await sellIx(program, signer.publicKey, new PublicKey(mint), toBase(tokensIn), toLamports(minSolOut))]);
+  const m = new PublicKey(mint);
+  const signature = await send(signer, [await sellIx(program, signer.publicKey, m, toBase(tokensIn), toLamports(minSolOut))], { units: CU.sell, writable: [pdas(m).launch] });
   return { signature, simulated: false };
 }
 
@@ -138,7 +172,8 @@ export async function redeemAtFloor(signer: StrataSigner, mint: string, tokens: 
   if (!PROGRAMS_LIVE) return settle({ signature: fakeSig(), simulated: true });
   live(signer);
   const program = programFor(signer.connection);
-  const signature = await send(signer, [await redeemIx(program, signer.publicKey, new PublicKey(mint), toBase(tokens), toLamports(minSolOut))]);
+  const m = new PublicKey(mint);
+  const signature = await send(signer, [await redeemIx(program, signer.publicKey, m, toBase(tokens), toLamports(minSolOut))], { units: CU.redeem, writable: [pdas(m).launch] });
   return { signature, simulated: false };
 }
 
@@ -146,7 +181,8 @@ export async function claimCreatorFees(signer: StrataSigner, mint: string): Prom
   if (!PROGRAMS_LIVE) return settle({ signature: fakeSig(), simulated: true });
   live(signer);
   const program = programFor(signer.connection);
-  const signature = await send(signer, [await claimCreatorFeesIx(program, signer.publicKey, new PublicKey(mint))]);
+  const m = new PublicKey(mint);
+  const signature = await send(signer, [await claimCreatorFeesIx(program, signer.publicKey, m)], { units: CU.claim, writable: [pdas(m).creatorFees] });
   return { signature, simulated: false };
 }
 
@@ -155,7 +191,7 @@ export async function claimVested(signer: StrataSigner, mint: string): Promise<T
   live(signer);
   const program = programFor(signer.connection);
   const m = new PublicKey(mint);
-  const signature = await send(signer, [ataIx(signer.publicKey, signer.publicKey, m), await claimVestedIx(program, signer.publicKey, m)]);
+  const signature = await send(signer, [ataIx(signer.publicKey, signer.publicKey, m), await claimVestedIx(program, signer.publicKey, m)], { units: CU.claim, writable: [pdas(m).launch] });
   return { signature, simulated: false };
 }
 
