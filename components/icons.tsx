@@ -148,6 +148,14 @@ export const IconX = ({ size = 20, ...rest }: P) => (
   </svg>
 );
 
+/** A capsule split in two, for the pump.fun link. */
+export const IconPill = (p: P) => (
+  <Base {...p} strokeLinecap="round">
+    <path d="M10.6 3.4a4.2 4.2 0 0 1 6 6l-7.2 7.2a4.2 4.2 0 0 1-6-6Z" />
+    <path d="M7 7l6 6" />
+  </Base>
+);
+
 /** The Strata mark: three offset strata with a floor line. */
 export function StrataMark({ size = 32, className }: { size?: number; className?: string }) {
   return (

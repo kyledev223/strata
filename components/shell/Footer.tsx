@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { IconGitHub, IconX, StrataMark } from "@/components/icons";
+import { IconGitHub, StrataMark } from "@/components/icons";
 import { shortAddress } from "@/lib/format";
-import { explorerUrl, PROGRAMS_LIVE } from "@/lib/config";
+import { CLUSTER, explorerUrl, PROGRAMS_LIVE, TESTNET } from "@/lib/config";
 import { CLUSTER_LABEL, isRealLink, LINKS, PROGRAM_LIST } from "@/lib/programs";
 import { PRIMARY_NAV, SECONDARY_NAV } from "./nav";
+import { Socials } from "./Socials";
 
 export function Footer() {
   return (
@@ -79,19 +80,19 @@ export function Footer() {
               GitHub
             </a>
           )}
-          {isRealLink(LINKS.x) && (
-            <a
-              href={LINKS.x}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Strata on X"
-              className="inline-grid size-8 place-items-center rounded-[4px] hover:bg-[color-mix(in_srgb,currentColor_14%,transparent)]"
-            >
-              <IconX size={16} />
-            </a>
-          )}
+          <Socials variant="footer" />
           <p className="ml-auto font-mono text-xs opacity-60">© 2026 Strata. Not financial advice.</p>
         </div>
+        {TESTNET && (
+          <p role="note" className="pb-6 font-mono text-xs leading-5 opacity-75">
+            <span className="font-semibold">{CLUSTER === "localnet" ? "Localnet" : "Devnet"}.</span> Strata is running on Solana {CLUSTER}:
+            test SOL only, with no real value. Switch your wallet to {CLUSTER} and{" "}
+            <a href="https://faucet.solana.com" target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">
+              get free test SOL
+            </a>
+            .
+          </p>
+        )}
       </div>
     </footer>
   );

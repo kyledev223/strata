@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { StrataMark } from "@/components/icons";
 import { cx } from "@/components/ui";
 import { ConnectButton } from "@/components/wallet/ConnectButton";
+import { Socials } from "./Socials";
 import { ThemeToggle } from "./ThemeToggle";
 import { isActive, PRIMARY_NAV, SECONDARY_NAV } from "./nav";
 
@@ -43,6 +44,8 @@ export function Header() {
               );
             })}
           </ul>
+          <div className="flex items-center gap-2">
+          <Socials variant="header" />
           <ul className="flex items-center gap-2">
             {SECONDARY_NAV.map(({ href, label, Icon }) => {
               const active = isActive(pathname, href);
@@ -63,6 +66,7 @@ export function Header() {
               );
             })}
           </ul>
+          </div>
         </nav>
 
         <div className="ml-auto flex flex-none items-center gap-2 min-[60rem]:ml-2">

@@ -1,8 +1,8 @@
-import { CLUSTER, PREVIEW, PROGRAMS_LIVE, SAMPLE_DATA, TESTNET } from "@/lib/config";
+import { PREVIEW, PROGRAMS_LIVE, SAMPLE_DATA } from "@/lib/config";
 
 /**
- * Site-wide notice. In preview: programs not deployed and/or sample data.
- * Live on a test cluster: real transactions, but test SOL with no value.
+ * Site-wide notice in preview: programs not deployed and/or sample data.
+ * The test-cluster notice lives in the footer.
  */
 export function PreviewBar() {
   if (PREVIEW) {
@@ -13,17 +13,6 @@ export function PreviewBar() {
     return (
       <Bar label="Preview">
         {parts.join("; ")}.
-      </Bar>
-    );
-  }
-  if (TESTNET) {
-    return (
-      <Bar label={CLUSTER === "localnet" ? "Localnet" : "Devnet"}>
-        Strata is running on Solana {CLUSTER}: test SOL only, with no real value. Switch your wallet to {CLUSTER} and{" "}
-        <a href="https://faucet.solana.com" target="_blank" rel="noreferrer" className="font-semibold text-ink underline underline-offset-2">
-          get free test SOL
-        </a>
-        .
       </Bar>
     );
   }

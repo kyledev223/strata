@@ -19,7 +19,14 @@ export const CLUSTER_LABEL = CLUSTER === "mainnet-beta" ? "mainnet" : CLUSTER;
 export const LINKS = {
   github: "https://github.com/",
   x: "https://x.com/",
+  pumpfun: "https://pump.fun/",
 } as const;
 
-/** A bare github.com / x.com URL is still the placeholder, so the UI hides it. */
-export const isRealLink = (url: string) => !/^https:\/\/(github|x)\.com\/?$/.test(url);
+/** An empty or bare-domain URL is still the placeholder, so the UI hides it. */
+export const isRealLink = (url: string) => !/^(https:\/\/(github\.com|x\.com|pump\.fun)\/?)?$/.test(url);
+
+/** Social buttons shown in the header and footer, once their links are set. */
+export const SOCIALS = [
+  { key: "x", href: LINKS.x, label: "Strata on X" },
+  { key: "pumpfun", href: LINKS.pumpfun, label: "Strata on pump.fun" },
+].filter((s) => isRealLink(s.href));
