@@ -1,6 +1,6 @@
 # Strata program spec (Phase 2, devnet)
 
-Status: **implemented and tested; devnet deploy pending funding.** The program lives in `program/`; see §14 for what was built and how it was verified. Worked numbers come from an exact integer model and are asserted by the math crate's tests.
+Status: **implemented, tested and live on devnet.** The program lives in `program/`; see §14 for what was built and how it was verified. Worked numbers come from an exact integer model and are asserted by the math crate's tests.
 
 ## 0. Decisions (all taken as recommended)
 
@@ -411,11 +411,13 @@ Mainnet is out of scope. When it comes up, the gates are an external audit and *
 | LiteSVM integration (lifecycle, vesting, drip, routed sells, redemption, claims, dust, zero supply, delay, slippage, substitution, settings, JIT, donations, vault ownership) | 13 pass |
 | LiteSVM stateful fuzz, invariants re-read from chain state after every tx | 20,357 txs across 60 launches, 0 violations |
 | Local validator + real UI (Playwright, real signatures): launch with vesting, buy, routed sell, redeem, claim fees, projects/redeem/home pages | 23/23 checks, invariants re-read from chain after each tx |
+| **Devnet** + real UI, same flow with real devnet transactions | all transactions confirmed, invariants held, floor only rose; zero console errors in normal browsing |
 
 **Compute units** (measured): launch + first buy 150k (one transaction), buy 57k (top-up path), routed sell 111k, redeem 34k. Clients request 400k.
 
+**Devnet deployment:** program `2KXPBww71SmCwdh4MAZ8P8UdpkzmFx8eNFd1437Hbw8s`, slot 512178829, 413,752 bytes, SHA-256 `9639c8493e2d57cbdc3ea8683d68e489bf76901d32de83fe2134a81faeff4242`. Upgrade authority: the deploy wallet (devnet only). The public devnet RPC drops many upload transactions; `deploy-devnet.sh` now uses priority fees and 100 sign attempts, and accepts `RPC_URL`.
+
 **Not done yet:**
-- Devnet deploy: blocked on devnet SOL (the faucet rate-limited the deploy wallet). `program/scripts/deploy-devnet.sh` does it in one step; it needs about 4–5 SOL (2.0 SOL rent plus a temporary buffer).
 - The 48-hour devnet soak with a watcher (§10, Layer 6).
 - Rust-vs-TypeScript differential test (Layer 2), `cargo-fuzz` target (Layer 3), mutation testing (Layer 4).
 - External audit and an immutable mainnet deploy (§11).

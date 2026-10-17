@@ -14,12 +14,15 @@ grep -q "$ID" programs/strata/src/lib.rs || { echo "declare_id! doesn't match $I
 
 scripts/build.sh
 SIZE=$(stat -c%s target/deploy/strata.so)
-NEED=$(solana rent "$SIZE" --url devnet | awk '/Rent-exempt minimum/ {print $3}')
+NEED=$(solana rent "$SIZE" --url "${RPC_URL:-devnet}" | awk '/Rent-exempt minimum/ {print $3}')
 echo "Program $ID, $SIZE bytes, ~$NEED SOL rent (plus a temporary buffer of about the same)"
-echo "Wallet $(solana address): $(solana balance --url devnet)"
+echo "Wallet $(solana address): $(solana balance --url "${RPC_URL:-devnet}")"
 
-solana program deploy target/deploy/strata.so --program-id "$PROGRAM_KEYPAIR" --url devnet --max-sign-attempts 30 --use-rpc
-solana program show "$ID" --url devnet
+# Public devnet RPC drops many write transactions; set RPC_URL to your Helius devnet URL if this struggles.
+# Priority fees + generous retries help uploads land when devnet is busy.
+URL="${RPC_URL:-devnet}"
+solana program deploy target/deploy/strata.so --program-id "$PROGRAM_KEYPAIR" --url "$URL"   --with-compute-unit-price "${CU_PRICE:-50000}" --max-sign-attempts 100
+solana program show "$ID" --url "$URL"
 echo
 echo "Deployed. Set on the website host:"
 echo "  NEXT_PUBLIC_SOLANA_CLUSTER=devnet"

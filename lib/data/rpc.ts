@@ -60,9 +60,16 @@ function ringPoints(ring: Bucket[], newestIndex: number, unitMs: number, size: n
   return pts;
 }
 
+// RPC budget: free RPC tiers allow ~10 requests/s. Confirmed transactions never
+// change, so their parsed events are cached forever; holder counts for 60 s.
+const HOLDERS_TTL_MS = 60_000;
+const ACTIVITY_LIMIT = 15;
+
 export class RpcDataSource implements StrataDataSource {
   private program: Program;
   private metaCache = new Map<string, { image?: string; description?: string }>();
+  private holdersCache = new Map<string, { at: number; value: Promise<number> }>();
+  private txEvents = new Map<string, TokenActivity[]>();
 
   constructor(private readonly connection: Connection) {
     this.program = programFor(connection);
@@ -83,16 +90,19 @@ export class RpcDataSource implements StrataDataSource {
     }
   }
 
-  private async holders(mint: PublicKey): Promise<number> {
-    try {
-      const accts = await this.connection.getProgramAccounts(TOKEN_PROGRAM_ID, {
-        filters: [{ dataSize: 165 }, { memcmp: { offset: 0, bytes: mint.toBase58() } }],
+  private holders(mint: PublicKey): Promise<number> {
+    const key = mint.toBase58();
+    const hit = this.holdersCache.get(key);
+    if (hit && Date.now() - hit.at < HOLDERS_TTL_MS) return hit.value;
+    const value = this.connection
+      .getProgramAccounts(TOKEN_PROGRAM_ID, {
+        filters: [{ dataSize: 165 }, { memcmp: { offset: 0, bytes: key } }],
         dataSlice: { offset: 64, length: 8 },
-      });
-      return accts.filter((a) => a.account.data.some((byte) => byte !== 0)).length;
-    } catch {
-      return 0;
-    }
+      })
+      .then((accts) => accts.filter((a) => a.account.data.some((byte) => byte !== 0)).length)
+      .catch(() => hit ? hit.value : 0); // keep the last good count if the RPC refuses
+    this.holdersCache.set(key, { at: Date.now(), value });
+    return value;
   }
 
   private async summarise(acc: LaunchAccount, now: number): Promise<TokenSummary & { _hourly: ReturnType<typeof ringPoints>; _daily: ReturnType<typeof ringPoints> }> {
@@ -220,24 +230,30 @@ export class RpcDataSource implements StrataDataSource {
     };
   }
 
+  /** Recent trades. One signature lookup per view; each transaction is fetched once, ever. */
   private async activity(launch: PublicKey): Promise<TokenActivity[]> {
     try {
-      const sigs = await this.connection.getSignaturesForAddress(launch, { limit: 20 }, "confirmed");
-      const txs = await this.connection.getTransactions(
-        sigs.filter((x) => !x.err).map((x) => x.signature),
-        { maxSupportedTransactionVersion: 0, commitment: "confirmed" },
-      );
-      const parser = new EventParser(PROGRAM_ID, this.program.coder);
-      const out: TokenActivity[] = [];
-      for (const tx of txs) {
-        for (const ev of parser.parseLogs(tx?.meta?.logMessages ?? [])) {
-          if (ev.name !== "trade") continue;
-          const d = ev.data as { kind: number; user: PublicKey; lamports: BN; tokens: BN; redeemedTokens: BN; ts: BN };
-          const kind = d.kind === 0 ? "buy" : d.kind === 2 || n(d.redeemedTokens) * 2 > n(d.tokens) ? "redeem" : "sell";
-          out.push({ kind, wallet: d.user.toBase58(), sol: sol(d.lamports), tokens: tokens(d.tokens), t: n(d.ts) * 1000 });
-        }
+      const sigs = (await this.connection.getSignaturesForAddress(launch, { limit: ACTIVITY_LIMIT }, "confirmed"))
+        .filter((x) => !x.err)
+        .map((x) => x.signature);
+      const missing = sigs.filter((sig) => !this.txEvents.has(sig));
+      if (missing.length) {
+        const txs = await this.connection.getTransactions(missing, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
+        const parser = new EventParser(PROGRAM_ID, this.program.coder);
+        missing.forEach((sig, i) => {
+          const tx = txs[i];
+          if (!tx) return; // not visible yet; try again next view
+          const events: TokenActivity[] = [];
+          for (const ev of parser.parseLogs(tx.meta?.logMessages ?? [])) {
+            if (ev.name !== "trade") continue;
+            const d = ev.data as { kind: number; user: PublicKey; lamports: BN; tokens: BN; redeemedTokens: BN; ts: BN };
+            const kind = d.kind === 0 ? "buy" : d.kind === 2 || n(d.redeemedTokens) * 2 > n(d.tokens) ? "redeem" : "sell";
+            events.push({ kind, wallet: d.user.toBase58(), sol: sol(d.lamports), tokens: tokens(d.tokens), t: n(d.ts) * 1000 });
+          }
+          this.txEvents.set(sig, events);
+        });
       }
-      return out.sort((a, b) => b.t - a.t);
+      return sigs.flatMap((sig) => this.txEvents.get(sig) ?? []).sort((a, b) => b.t - a.t);
     } catch {
       return [];
     }
